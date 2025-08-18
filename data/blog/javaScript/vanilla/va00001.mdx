@@ -1,0 +1,479 @@
+---
+title: 'JavaScript로 한글 자동완성 정규식 만들기'
+date: 2024-06-17
+tags: ['javascript', 'vanilla-js']
+draft: false
+summary: '자동완성에 필요한 환경이 충분하지 않을때 빠르고 정확한 자동완성 기능을 완성해야한다면 꼭 참고하세요!'
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. 정규식 리턴해주는 함수 호출
+```javascript
+const makeSearchRegexKO = (search = "") => { /* 1. 검색어를 인자로 받는다 */
+  search = checkSpecialWord(search.toUpperCase()); /* 2. 특수문자를 정규식으로 치환해준다 */
+  let regSearch = checkMiddleEnd(search); /* 3. 검색어의 마지막 글자가 중성으로 끝나는지 확인한다 */
+
+  const regex = firstConsonantList.reduce(
+    (acc, first, index) =>
+      acc.replace(
+        new RegExp(first, "g"),
+        `[\\u${combine(index, 0, 0)}-\\u${combine(index + 1, 0, -1)}]` // [시작-끝] -> [가-깋]
+      ),
+    regSearch
+  ); /* 4. 초성으로만 들어온 글자가 있는경우 ex) ㅎ -> [하-힣]으로 치환한다 */
+
+  return regex;
+};
+```
+---
+# 2. 특수문자를 정규식으로 치환
+```javascript
+/* 특수문자 단어 리스트 */
+const specialWordList = [
+  "*",
+  "?",
+  "+",
+  "[",
+  "(",
+  ")",
+  "{",
+  "}",
+  "^",
+  "$",
+  "|",
+  "\\",
+];
+
+/* 특수문자를 정규식에 포함하기 위해 치환
+ex) 안 녕$#@ -> 안\\s녕\\#\\@
+*/
+const checkSpecialWord = (search) => {
+  let alterSearch = "";
+  for (let i = 0; i < search.length; i++) {
+    if (search[i] === " ") alterSearch += "\\s";
+    else if (specialWordList.includes(search[i]))
+      alterSearch += `\\${search[i]}`;
+    else alterSearch += search[i];
+  }
+
+  return alterSearch;
+};
+```
+---
+# 3. 검색어의 마지막 글자가 중성으로 끝나는지 확인 후 변환
+```javascript
+const checkMiddleEnd = (search) => {
+  let regSearch = search;
+  if (search !== "") {
+    /* 검색어의 마지막 글자를 제거 */
+    regSearch = search.slice(0, -1);
+    /*3-1. 마지막 글자를 확인후 변환하고 붙임 */
+    regSearch += checkLastWord(
+      search.substring(search.length - 1, search.length)
+    );
+  }
+
+  return regSearch;
+};
+```
+## 3-1. 마지막 글자를 확인 후 변환
+```javascript
+
+const checkLastWord = (word) => {
+  /* 검색어의 마지막 글자를 아스키코드로 변환 */
+  let wordCode = word.charCodeAt();
+
+  /* 마지막 글자가 한글이면 종성코드값 추출*/
+  if (44032 <= wordCode && wordCode <= 55203) {
+    let baseCode = wordCode - 44032;
+    let lastCode = 4519 + Math.floor(baseCode % 28);
+
+    /* 3-1-1. 종성이 없으면 ex)나,니,느 */
+    if (lastCode === 4519) {
+      return makeMiddleRegWord(wordCode);
+
+    } else {  /*3-1-2. 종성이 있으면 ex)난,닝,궁 */
+      let result = makeLastRegWord(wordCode, lastCode);
+      if (result === "") return word;
+      else return result;
+    }
+  } else {
+    return word;
+  }
+};
+```
+### 3-1-1. 종성이 없으면 ex)나,니,느
+```javascript
+/* 아스키 코드를 유니코드로 변환 후 정규식 리턴
+ex) 나 -> [나-낳] -> [\ub098-\ub0b3]*/
+const makeMiddleRegWord = (wordCode) => {
+  let startWord = String.fromCharCode(wordCode).charCodeAt().toString(16);
+  let lastWord = String.fromCharCode(wordCode + 27)
+    .charCodeAt()
+    .toString(16);
+  return `[\\u${startWord}-\\u${lastWord}]`;
+};
+```
+### 3-1-2. 종성이 있으면 ex)난,닝,궁
+```javascript
+/* 단일 종성 리스트 */
+const lastConvertList = [
+  { code: 4520, word: "ㄱ" },
+  { code: 4521, word: "ㄲ" },
+  { code: 4523, word: "ㄴ" },
+  { code: 4526, word: "ㄷ" },
+  { code: 4527, word: "ㄹ" },
+  { code: 4535, word: "ㅁ" },
+  { code: 4536, word: "ㅂ" },
+  { code: 4538, word: "ㅅ" },
+  { code: 4539, word: "ㅆ" },
+  { code: 4540, word: "ㅇ" },
+  { code: 4541, word: "ㅈ" },
+  { code: 4542, word: "ㅊ" },
+  { code: 4543, word: "ㅋ" },
+  { code: 4544, word: "ㅌ" },
+  { code: 4545, word: "ㅍ" },
+  { code: 4546, word: "ㅎ" },
+];
+
+/* 복합 종성 리스트 */
+const doubleLastConvertList = [
+  { code: 4522, word: "ㄳ", prevCode: 4520, nextIndex: 9 },
+  { code: 4524, word: "ㄵ", prevCode: 4523, nextIndex: 12 },
+  { code: 4525, word: "ㄶ", prevCode: 4523, nextIndex: 18 },
+  { code: 4528, word: "ㄺ", prevCode: 4527, nextIndex: 0 },
+  { code: 4529, word: "ㄻ", prevCode: 4527, nextIndex: 6 },
+  { code: 4530, word: "ㄼ", prevCode: 4527, nextIndex: 7 },
+  { code: 4531, word: "ㄽ", prevCode: 4527, nextIndex: 9 },
+  { code: 4532, word: "ㄾ", prevCode: 4527, nextIndex: 16 },
+  { code: 4533, word: "ㄿ", prevCode: 4527, nextIndex: 17 },
+  { code: 4534, word: "ㅀ", prevCode: 4527, nextIndex: 18 },
+  { code: 4537, word: "ㅄ", prevCode: 4536, nextIndex: 9 },
+
+];
+
+const makeLastRegWord = (wordCode, lastCode) => {
+  let word = "";
+  for (let i = 0; i < lastConvertList.length; i++) {
+    /* 단일 종성일 경우 */
+    if (lastCode === lastConvertList[i].code) {
+      word = lastConvertList[i].word;
+      let connectionWordCode = wordCode - lastCode + 4519; // ex)검색어 : 슽 -> 스 만들고
+      let lastConnection = makeLastConnection(word); //3-1-2-1. [타-팋] 만들고 연결
+      if (lastConnection === "") {
+        return "";
+      } else {
+        /* return (슽 | 스[타-팋]) */
+        return `(\\u${String.fromCharCode(wordCode)
+          .charCodeAt()
+          .toString(16)}|\\u${String.fromCharCode(connectionWordCode)
+          .charCodeAt()
+          .toString(16)}${lastConnection})`;
+      }
+    }
+  }
+
+  if (word === "") {
+    for (let i = 0; i < doubleLastConvertList.length; i++) {
+      if (lastCode === doubleLastConvertList[i].code) {
+        /* 복합 종성일 경우 */
+        let nextIndex = doubleLastConvertList[i].nextIndex;
+        let connectionWordCode =
+          wordCode - lastCode + doubleLastConvertList[i].prevCode; // ex)검색어 : 홙 -> 환 만들고
+        let lastConnection = `[\\u${combine(nextIndex, 0, 0)}-\\u${combine(
+          nextIndex + 1,
+          0,
+          -1
+        )}]`; //[자-짛] 만들고 연결
+
+        /* return (홙 | 환[자-짛]) */
+        return `(\\u${String.fromCharCode(wordCode)
+          .charCodeAt()
+          .toString(16)}|\\u${String.fromCharCode(connectionWordCode)
+          .charCodeAt()
+          .toString(16)}${lastConnection})`;
+      }
+    }
+  }
+};
+```
+* 3-1-2-1. [타-팋] 만들고 연결
+  ```javascript
+  const firstConsonantList = [
+  //초성 배열
+  "ㄱ",
+  "ㄲ",
+  "ㄴ",
+  "ㄷ",
+  "ㄸ",
+  "ㄹ",
+  "ㅁ",
+  "ㅂ",
+  "ㅃ",
+  "ㅅ",
+  "ㅆ",
+  "ㅇ",
+  "ㅈ",
+  "ㅉ",
+  "ㅊ",
+  "ㅋ",
+  "ㅌ",
+  "ㅍ",
+  "ㅎ",
+  ];
+
+  const makeLastConnection = (word) => {
+  let firstIndex = firstConsonantList.indexOf(word);
+  if (firstIndex === -1) {
+    return "";
+  } else {
+    return `[\\u${combine(firstIndex, 0, 0)}-\\u${combine(
+      firstIndex + 1,
+      0,
+      -1
+    )}]`;
+  }
+};
+  ```
+
+# 4. 초성으로만 들어온 글자가 있는경우
+```javascript
+const koStartCharCode = "가".charCodeAt(); //한글 시작 유니코드
+
+const firstConsonantPeriod = Math.floor("까".charCodeAt() - "가".charCodeAt()); //초성 주기
+const lastConsonantPeriod = Math.floor("개".charCodeAt() - "가".charCodeAt()); // 종성 주기
+
+const combine = (first, middle, last) => {
+  //(초성,중성,종성)
+  return String.fromCharCode(
+    koStartCharCode +
+      first * firstConsonantPeriod +
+      middle * lastConsonantPeriod +
+      last
+  )
+    .charCodeAt()
+    .toString(16);
+};
+```
+
+# 5. 완성된 코드
+```javascript
+/* example.js */
+
+/* 한글 구역 */
+const firstConsonantList = [
+  //초성 배열
+  "ㄱ",
+  "ㄲ",
+  "ㄴ",
+  "ㄷ",
+  "ㄸ",
+  "ㄹ",
+  "ㅁ",
+  "ㅂ",
+  "ㅃ",
+  "ㅅ",
+  "ㅆ",
+  "ㅇ",
+  "ㅈ",
+  "ㅉ",
+  "ㅊ",
+  "ㅋ",
+  "ㅌ",
+  "ㅍ",
+  "ㅎ",
+];
+
+const lastConvertList = [
+  { code: 4520, word: "ㄱ" },
+  { code: 4521, word: "ㄲ" },
+  { code: 4523, word: "ㄴ" },
+  { code: 4526, word: "ㄷ" },
+  { code: 4527, word: "ㄹ" },
+  { code: 4535, word: "ㅁ" },
+  { code: 4536, word: "ㅂ" },
+  { code: 4538, word: "ㅅ" },
+  { code: 4539, word: "ㅆ" },
+  { code: 4540, word: "ㅇ" },
+  { code: 4541, word: "ㅈ" },
+  { code: 4542, word: "ㅊ" },
+  { code: 4543, word: "ㅋ" },
+  { code: 4544, word: "ㅌ" },
+  { code: 4545, word: "ㅍ" },
+  { code: 4546, word: "ㅎ" },
+];
+
+const doubleLastConvertList = [
+  { code: 4522, word: "ㄳ", prevCode: 4520, nextIndex: 9 },
+  { code: 4524, word: "ㄵ", prevCode: 4523, nextIndex: 12 },
+  { code: 4525, word: "ㄶ", prevCode: 4523, nextIndex: 18 },
+  { code: 4528, word: "ㄺ", prevCode: 4527, nextIndex: 0 },
+  { code: 4529, word: "ㄻ", prevCode: 4527, nextIndex: 6 },
+  { code: 4530, word: "ㄼ", prevCode: 4527, nextIndex: 7 },
+  { code: 4531, word: "ㄽ", prevCode: 4527, nextIndex: 9 },
+  { code: 4532, word: "ㄾ", prevCode: 4527, nextIndex: 16 },
+  { code: 4533, word: "ㄿ", prevCode: 4527, nextIndex: 17 },
+  { code: 4534, word: "ㅀ", prevCode: 4527, nextIndex: 18 },
+  { code: 4537, word: "ㅄ", prevCode: 4536, nextIndex: 9 },
+];
+
+const specialWordList = [
+  "*",
+  "?",
+  "+",
+  "[",
+  "(",
+  ")",
+  "{",
+  "}",
+  "^",
+  "$",
+  "|",
+  "\\",
+];
+
+const koStartCharCode = "가".charCodeAt(); //한글 시작 유니코드
+
+const firstConsonantPeriod = Math.floor("까".charCodeAt() - "가".charCodeAt()); //초성 주기
+const lastConsonantPeriod = Math.floor("개".charCodeAt() - "가".charCodeAt()); // 종성 주기
+
+const combine = (first, middle, last) => {
+  //(초성,중성,종성)
+  return String.fromCharCode(
+    koStartCharCode +
+      first * firstConsonantPeriod +
+      middle * lastConsonantPeriod +
+      last
+  )
+    .charCodeAt()
+    .toString(16);
+};
+
+const makeSearchRegexKO = (search = "") => {
+  search = checkSpecialWord(search.toUpperCase());
+  let regSearch = checkMiddleEnd(search);
+
+  const regex = firstConsonantList.reduce(
+    (acc, first, index) =>
+      acc.replace(
+        new RegExp(first, "g"),
+        `[\\u${combine(index, 0, 0)}-\\u${combine(index + 1, 0, -1)}]` // [시작-끝] -> [가-깋]
+      ),
+    regSearch
+  );
+
+  return regex;
+};
+
+const checkMiddleEnd = (search) => {
+  let regSearch = search;
+  if (search !== "") {
+    regSearch = search.slice(0, -1);
+    regSearch += checkLastWord(
+      search.substring(search.length - 1, search.length)
+    );
+  }
+
+  return regSearch;
+};
+
+const checkLastWord = (word) => {
+  let wordCode = word.charCodeAt();
+  if (44032 <= wordCode && wordCode <= 55203) {
+    let baseCode = wordCode - 44032;
+    let lastCode = 4519 + Math.floor(baseCode % 28);
+
+    if (lastCode === 4519) {
+      return makeMiddleRegWord(wordCode);
+    } else {
+      let result = makeLastRegWord(wordCode, lastCode);
+      if (result === "") return word;
+      else return result;
+    }
+  } else {
+    return word;
+  }
+};
+
+const makeMiddleRegWord = (wordCode) => {
+  let startWord = String.fromCharCode(wordCode).charCodeAt().toString(16);
+  let lastWord = String.fromCharCode(wordCode + 27)
+    .charCodeAt()
+    .toString(16);
+  return `[\\u${startWord}-\\u${lastWord}]`;
+};
+
+const makeLastRegWord = (wordCode, lastCode) => {
+  let word = "";
+  for (let i = 0; i < lastConvertList.length; i++) {
+    if (lastCode === lastConvertList[i].code) {
+      word = lastConvertList[i].word;
+      let connectionWordCode = wordCode - lastCode + 4519; //스 만들고
+      let lastConnection = makeLastConnection(word); //[타-팋] 만들고 연결
+      if (lastConnection === "") {
+        return "";
+      } else {
+        return `(\\u${String.fromCharCode(wordCode)
+          .charCodeAt()
+          .toString(16)}|\\u${String.fromCharCode(connectionWordCode)
+          .charCodeAt()
+          .toString(16)}${lastConnection})`;
+      }
+    }
+  }
+
+  if (word === "") {
+    for (let i = 0; i < doubleLastConvertList.length; i++) {
+      if (lastCode === doubleLastConvertList[i].code) {
+        let nextIndex = doubleLastConvertList[i].nextIndex;
+        let connectionWordCode =
+          wordCode - lastCode + doubleLastConvertList[i].prevCode; //환 만들고
+        let lastConnection = `[\\u${combine(nextIndex, 0, 0)}-\\u${combine(
+          nextIndex + 1,
+          0,
+          -1
+        )}]`; //[자-짛] 만들고 연결
+        return `(\\u${String.fromCharCode(wordCode)
+          .charCodeAt()
+          .toString(16)}|\\u${String.fromCharCode(connectionWordCode)
+          .charCodeAt()
+          .toString(16)}${lastConnection})`;
+      }
+    }
+  }
+};
+
+const makeLastConnection = (word) => {
+  let firstIndex = firstConsonantList.indexOf(word);
+  if (firstIndex === -1) {
+    return "";
+  } else {
+    return `[\\u${combine(firstIndex, 0, 0)}-\\u${combine(
+      firstIndex + 1,
+      0,
+      -1
+    )}]`;
+  }
+};
+
+const checkSpecialWord = (search) => {
+  let alterSearch = "";
+  for (let i = 0; i < search.length; i++) {
+    if (search[i] === " ") alterSearch += "\\s";
+    else if (specialWordList.includes(search[i]))
+      alterSearch += `\\${search[i]}`;
+    else alterSearch += search[i];
+  }
+
+  return alterSearch;
+};
+/* 한글 구역 */
+export { makeSearchRegexKO };
+
+```

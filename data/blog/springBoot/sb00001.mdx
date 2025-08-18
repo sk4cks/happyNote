@@ -1,0 +1,38 @@
+---
+title: '초간단 Spring Boot Window 서비스 등록'
+date: 2024-05-27
+tags: ['java', 'springboot', 'window']
+draft: false
+summary: 'winsw를 이용한 Spring Boot 서비스 윈도우에서 등록하는 방법'
+layout: PostSimple
+---
+
+# winsw Download
+* [https://www.baeldung.com/spring-boot-app-as-a-service](https://www.baeldung.com/spring-boot-app-as-a-service) 접속
+* On Windows 영역에서 here 버튼을 클릭 후 실행 파일 다운.
+
+![image](https://github.com/sk4cks/ProgrammersSQL/assets/109573477/df2e096c-bd8e-4c74-8e3e-e84867fd7cef)
+
+* 실행파일과 이름이 동일한 xml파일 생성
+
+    ```xml
+    # MyApp.xml
+
+    <service>
+        <id>MyAppservice</id>
+        <name>MyAppservice</name>
+        <description>This runs Spring Boot as a Service.</description>
+        <executable>java</executable>
+        <arguments>-jar C:/my/myApp.jar</arguments>
+        <logmode>rotate</logmode>
+    </service>
+    ```
+
+* 서비스 등록
+  * 관리자 권한으로 cmd를 실행 후 MyApp.exe와 MyApp.xml이 있는 폴더 경로로 이동 후 install
+  ![image](https://github.com/sk4cks/ProgrammersSQL/assets/109573477/a2a521b6-e702-4d00-8a86-0b84be46c5a8)
+
+
+* 서비스 확인
+  * 작업관리자 -> 서비스에 설정한 name값으로 등록되어있는지 확인.
+  ![image](https://github.com/sk4cks/ProgrammersSQL/assets/109573477/1dd0824c-c5c9-4b00-b414-d521457729dd)

@@ -1,0 +1,42 @@
+---
+title: 'React vite빌드 프로젝트 생성'
+date: 2024-07-30
+tags: ['javascript', 'react-js']
+draft: false
+layout: PostSimple
+---
+
+# react 세팅 과정
+1. node.js 설치
+   * [https://nodejs.org/en/download/package-manager]
+2. vscode 설치
+   * [https://code.visualstudio.com/Download]
+3. node 버전에 맞는 vite 프로젝트 생성
+   ```bash
+   # node 16.18.0 기준
+   npm create vite@4.3.2
+   > 프로젝트 명
+   > 사용 언어
+
+   #npm create vite@4.3.2 명령어를 입력하면 프로젝트 명 하고 사용언어를 선택하라는 메시지가 나온다
+   ```
+4. 만들어진 폴더로 이동 후 실행
+   ```bash
+   cd 프로젝트 명
+   yarn
+   yarn dev
+
+   # yarn이 설치되어있으면 yarn으로 해도 되고 npm으로 해도 된다.
+   ```
+5. port 번호 변경(선택)
+   * package.json 파일에서 포트번호를 직접 명시한다.
+    ![image](https://github.com/user-attachments/assets/f553ee54-c1fd-4cf1-acad-77d2ca302878)
+
+6. 설치가 잘 되었는지 확인
+   ```bash
+   yarn dev
+   # yarn dev 명령어로 실행한다
+   ```
+   ![image](https://github.com/user-attachments/assets/b601a938-7a8b-4315-905c-c5ad9bd777f2)
+   
+   이 화면으로 정상적으로 설치가 완료되었음을 확인한다.

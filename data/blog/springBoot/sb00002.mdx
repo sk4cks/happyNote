@@ -1,0 +1,90 @@
+---
+title: '초간단 Spring Boot Linux 서비스 등록'
+date: 2024-05-31
+tags: ['java', 'springboot', 'linux']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# service 파일 생성
+
+* vi 편집기로 파일 생성
+    ```bash
+    vi /ect/systemd/system/my_service.service
+    ```
+
+* 서비스 파일 작성 후 저장
+  ```bash
+  [Unit]
+  Description=Image Processing Service
+  After=network.target
+
+  [Service]
+  ExecStart=/bin/bash -c "exec /usr/lib/java/jdk8u392-b08/bin/java -jar /my-app.jar"
+
+  [Install]
+  WantedBy=multi-user.target
+
+  ```
+
+  * 각 섹션의 의미
+    * \[Unit\]: 서비스 설명 및 서비스 시작 순서 정의.
+    * Description: 서비스에 대한 설명.
+    * After: 특정 서비스가 시작된 후에 이 서비스를 시작.
+    * \[Service\]: 서비스 실행 명령과 설정.
+    * ExecStart: 서비스 실행 명령.
+    * WorkingDirectory: 서비스 실행 위치.
+    * Restart: 서비스가 중지되었을 때 다시 시작할지 여부.
+    * User 및 Group: 서비스가 실행될 사용자 및 그룹.
+    * \[Install\]: 서비스 설치 시의 설정.
+
+<br/>
+
+# systemd에 적용
+```bash
+sudo systemctl daemon-reload
+```
+<br/>
+
+# 서비스 시작 및 활성화
+
+* 서비스 시작
+  ```bash
+  sudo systemctl start my_service.service
+  ```
+
+* 서비스 활성화
+  ```bash
+  sudo systemctl enable my_service.service
+  ```
+<br/>
+
+# 서비스 상태 확인
+```bash
+sudo systemctl status my_service.service
+```
+<br/>
+
+# 서비스 중지 및 비활성화
+
+* 서비스 중지
+  ```bash
+  sudo systemctl stop my_service.service
+  ```
+
+* 서비스 비활성화
+  ```bash
+  sudo systemctl disable my_service.service
+  ```
+<br/>
+
+# 현재 실행중인 서비스 리스트 확인
+```bash
+systemctl list-units --type=service --state=running
+```

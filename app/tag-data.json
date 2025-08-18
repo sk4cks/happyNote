@@ -1,7 +1,7 @@
 {
   "markdown": 1,
   "code": 1,
-  "features": 1,
+  "나카롱": 1,
   "next-js": 6,
   "math": 1,
   "ols": 1,
@@ -13,5 +13,18 @@
   "writings": 1,
   "book": 1,
   "reflection": 1,
-  "multi-author": 1
+  "git": 1,
+  "gitlab": 1,
+  "java": 3,
+  "linux": 3,
+  "curl": 1,
+  "multi-author": 1,
+  "springboot": 2,
+  "window": 1,
+  "db": 1,
+  "sql": 1,
+  "javascript": 4,
+  "react-js": 2,
+  "vanilla-js": 1,
+  "vue-js": 1
 }

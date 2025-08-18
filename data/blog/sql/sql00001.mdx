@@ -1,0 +1,30 @@
+---
+title: '서브쿼리는 CTE'
+date: 2024-06-07
+tags: ['db', 'sql']
+draft: false
+summary: 'CTE절을 이용한 서브쿼리 작성방법'
+layout: PostSimple
+---
+
+# CTE(Common Table Expressions)란?
+쿼리를 통해 만들어낸 임시적인 데이터 세트.
+
+* 코드 예시
+  ```sql
+  WITH cte_name AS (
+    SELECT
+        name,
+        phone,
+        job
+    FROM MEMBER
+  )
+  SELECT
+    *
+  FROM MEMBER_INFO A
+  INNER JOIN cte_name B
+  ON (B.name = A.name)
+  ```
+
+* 장점 <br/>
+  쿼리 실행 시 한 번 정의되며, 그 쿼리 내에서만 사용할 수 있는, 복잡한 서브쿼리를 보다 읽기 쉽게 만듭니다. CTE를 사용하면 재사용 가능하고 유지 관리가 쉬운 코드를 작성할 수 있습니다.

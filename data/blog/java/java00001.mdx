@@ -1,0 +1,26 @@
+---
+title: '초간단 JAVA 날짜 비교'
+date: 2024-06-07
+tags: ['java']
+draft: false
+summary: 'ChronoUnit 클래스를 이용한 JAVA날짜 비교하기'
+layout: PostSimple
+---
+
+# ChronoUnit 날짜 비교 클래스
+
+* ChronoUnit 클래스는 날짜비교를 굉장히 짧은 코드로 비교할 수 있다.
+  ```java
+  DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+  String strPrevDate = "2022.01.20";
+  String strNextDate = "2022.05.19";
+
+  LocalDate prevDate = LocalDate.parse(strPrevDate, formatter);
+  LocalDate nextDate = LocalDate.parse(strNextDate, formatter);
+
+  long result = ChronoUnit.MONTHS.between(date1,date2);
+  //result 3
+  ```
+
+
+- YEARS, MONTHS, DAYS, HOURS 다 비교할 수 있는 아주 좋은 클래스다.

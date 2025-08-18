@@ -1,0 +1,54 @@
+---
+title: 'GitLab ssh 로그인'
+date: 2024-05-31
+tags: ['git', 'gitLab']
+draft: false
+summary: 'SSH 키를 이용한 GitLab 로그인 설정하기'
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# ssh-key 파일 생성
+1. git bash 실행
+2. ssh-key 파일이 있는지 확인
+   ```bash
+   cd ~/.ssh
+   # 없으면 No such file or directory 가 나옴
+   ```
+3. 없으면 다음 명령어로 키 파일 생성
+   ```bash
+   ssh-keygen -t rsa -b 2048
+   # 명령어 입력후 다 엔터 눌러주면 됩니다.
+   ```
+<br/>
+
+# ssh-key 파일 확인 후 복사
+1. ssh-key 파일이 있는 경로로 이동
+   ```
+   cd ~/.ssh
+   ```
+2. key 파일 복사
+   ```bash
+   cat id_rsa.pub
+   # 명령어 입력후 나온 내용 복사
+   ```
+<br/>
+
+# GitLab에 key파일 등록
+1. GitLab 로그인 후 Edit profile -> User Settings -> SSH Keys로 이동
+   ![image](https://github.com/sk4cks/ProgrammersSQL/assets/109573477/3ca01516-451a-4666-a5b6-d0fa19bf78b2)
+2. Key 영역에 복사한 내용 붙여넣기 후 Add Key 버튼 클릭
+
+
+<br/>
+
+# Git Bash 에 내 정보 저장
+```bash
+git config --global user.name "홍길동"
+git config --global user.email "abcd@email.com"
+```

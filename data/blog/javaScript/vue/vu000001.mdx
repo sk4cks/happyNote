@@ -1,0 +1,43 @@
+---
+title: 'Vue MasterLayout 설정시 Troubleshooting'
+date: 2024-07-30
+tags: ['javascript', 'vue-js']
+draft: false
+layout: PostSimple
+---
+
+## 문제
+레이아웃이 변경될때마다 onMounted 함수 2번호출
+
+## 해결
+MasterLayout에서 동적으로 임포트 하던것을 정적 임포트로 변경
+
+## 기존
+```javascript
+watchEffect(async () => {
+  try {
+    const component = await import(`./sublayout/${route.meta.layout}.vue`)
+    layout.value = markRaw(component?.default || SimpleLayout)
+  } catch (e) {
+    layout.value = SimpleLayout
+  }                  
+})
+```
+
+## 변경
+```javascript
+import layout1 from "./sublayout/layout1.vue";
+import layout2 from "./sublayout/layout2.vue";
+
+router.afterEach(async (to, from) => {
+  switch (to.meta.layout) {
+    case "layout1":
+      layout.value = markRaw(layout1);
+      break;
+    case "layout2":
+      layout.value = markRaw(layout2);
+      break;
+  }
+});
+
+```
