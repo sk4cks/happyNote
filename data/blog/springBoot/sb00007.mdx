@@ -1,0 +1,63 @@
+---
+title: '[SDKMAN] 스프링 부트 프로젝트 생성'
+date: 2024-08-31
+tags: ['sdkman', 'springboot']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+> 💡WINDOW에서 SDKMAN을 이용한 스프링 부트 프로젝트 생성 방법
+
+## 1. SDKMAN 설치
+
+- 스크립트 실행
+  ```bash
+  curl -s "https://get.sdkman.io" | bash
+  ```
+  ![image](https://github.com/user-attachments/assets/1f2f372c-067b-4092-8a0d-c7400f2c7f87)
+- 위의 메시지가 나오면 그대로 새로운 터미널을 열어서 스크립트를 실행해주면 설치가 완료된다.
+
+## 2. JAVA 설치
+
+- JAVA의 버전을 확인한다
+  ```bash
+  sdk list java
+  ```
+  ![image](https://github.com/user-attachments/assets/1290664b-e506-4fff-a9ce-5000e1c77abf)
+- 사용할 JAVA 버전의 Identifier를 복사해 설치를 한다.
+  ```bash
+  sdk install java 17.0.12-amzn
+  ```
+
+## 3. Spring boot 설치
+
+```bash
+sdk install springboot #최신버전 설치
+sdk install springboot 3.2.0 #3.2.0버전 설치
+```
+
+## 4. 프로젝트 생성
+
+```bash
+spring init -b 3.2.0 -d web -g toby-project -j 17 -n springbasic -x springbasic
+# -b : --boot-version
+# -d : --dependencies
+# -g : --group-id
+# -j : --java-version
+# -n : --name
+# -x : --extract
+```
+
+## 5. 실행 테스트
+
+```bash
+cd springbasic
+
+./gradlew bootRun
+```

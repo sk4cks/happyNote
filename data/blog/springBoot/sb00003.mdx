@@ -1,0 +1,55 @@
+---
+title: '[TroubleShooting] could not be injected because it is a JDK dynamic proxy'
+date: 2024-08-17
+tags: ['java', 'springboot']
+draft: false
+layout: PostSimple
+---
+
+### 1. 문제
+
+```java
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+The bean 'com.iic.service.MyServiceImpl' could not be injected because it is a JDK dynamic proxy
+
+The bean is of type 'com.sun.proxy.$Proxy162' and implements:
+	com.iic.service.MyService
+	org.springframework.aop.SpringProxy
+	org.springframework.aop.framework.Advised
+	org.springframework.core.DecoratingProxy
+
+Expected a bean of type 'com.iic.service.MyServiceImpl' which implements:
+	com.iic.service.AttfileService
+
+
+Action:
+
+Consider injecting the bean as one of its interfaces or forcing the use of CGLib-based proxies by setting proxyTargetClass=true on @EnableAsync and/or @EnableCaching.
+
+```
+
+- JDK 동적 프록시는 인터페이스를 기반으로 생성됩니다. 따라서 프록시된 객체를 주입하려면, 인터페이스 타입으로 주입해야 합니다.
+- 만약 주입하려는 빈이 특정 클래스 타입으로 주입되어야 하는데, 해당 클래스가 JDK 동적 프록시로 생성된 경우, 클래스 타입으로는 주입이 불가능하며 이로 인해 오류가 발생합니다.
+
+### 2. 원인
+
+```java
+@Autowired
+private MyServiceImpl myService;
+```
+
+@Autowired로 빈 객체를 주입할때 인터페이스를 주입해야되는데 구현체를 주입해서 생긴 오류
+
+### 3. 해결
+
+```java
+@Autowired
+private MyService myService;
+```
+
+인터페이스 빈을 주입

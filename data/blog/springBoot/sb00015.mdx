@@ -1,0 +1,19 @@
+---
+title: '🗝️[스프링 시큐리티 OAuth2] SecurityBuilder / SecurityConfigurer 개념 및 구조 이해'
+date: 2024-11-13
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+- SecurityBuilder는 빌더 클래스로서 웹 보안을 구성하는 빈 객체와 설정 클래스들을 생성하는 역할을 하며 WebSecurity, HttpSecurity가 있다.
+- SecurityConfigurer는 Http요청과 관련된 보안처리를 담당하는 필터들을 생성하고 여러 초기화 설정에 관여한다.
+- SecurityBuilder는 SecurityConfigurer를 포함하고 있으며 인증 및 인가 초기화 작업은 SecurityConfigurer에 의해 진행된다.
+
+![image](https://github.com/user-attachments/assets/daf63779-9e95-4fef-a0e4-ccb7bbe396fe)
+
+> 자동 설정에 의해서 SecurityBuilder 클래스의 build() 메서드가 실행이 되면 실행이 되는 과정 속에서 SecurityConfigurer 클래스의 init()과 configure()메서드가 호출되고 이 두개의 메서드 안에서 초기화 설정 작업이 이루어진다.
+
+![image](https://github.com/user-attachments/assets/6d51d1cc-610d-419b-bc60-2817740883df)
+
+![image](https://github.com/user-attachments/assets/ca156d9e-f8fb-42cc-8755-5b2c965a17e9)

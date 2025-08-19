@@ -1,0 +1,305 @@
+---
+title: '🌻[스프링 시큐리티 OAuth2] oauth2Login()'
+date: 2025-01-21
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. OAuth2LoginConfigurer
+
+## 1-1). OAuth2LoginConfigurer 초기화 및 설정
+
+### 설정 클래스 생성
+
+```java
+@Configuration(proxyBeanMethods = false)
+public class CustomOAuth2ClientConfig {
+
+	@Bean
+	SecurityFilterChain oauth2SecurityFilterChain(HttpSecurity http) throws Exception {
+		http.authorizeRequests((requests) -> requests.anyRequest().authenticated());
+		http.oauth2Login(Customizer.withDefaults());
+		http.oauth2Client();
+		return http.build();
+	}
+}
+```
+
+- API 설정
+  - SecurityFilterChain 타입의 빈을 생성해서 보안 필터를 구성한다
+  - HttpSecurity 에 있는 oauth2Login() 과 oauth2Client() API 를 정의하고 빌드한다
+
+![Image](https://github.com/user-attachments/assets/472b5442-01cf-499d-b54a-d097bdf5043b)
+![Image](https://github.com/user-attachments/assets/8f74c789-3e23-43a8-9bbf-2311811fd267)
+![Image](https://github.com/user-attachments/assets/d5de5438-28a3-4e0d-82f2-543f78d350e2)
+
+# 2. OAuth2 로그인 구현
+
+## 2-1). OAuth 2.0 Login Page 생성
+
+![Image](https://github.com/user-attachments/assets/48abd9b3-f4e1-4b22-8b1c-86093e73cf7b)
+
+## 2-2). Authorization Code 요청하기
+
+### 요청 매핑 Url
+
+- AuthorizationRequestMatcher : **`/oauth2/authorization/{registrationId}*`**
+- AuthorizationEndpointConfig. authorizationRequestBaseUri 를 통해 재정의될 수 있다
+
+### 주요 클래스
+
+- **OAuth2AuthorizationRequestRedirectFilter**
+  - 클라이언트는 사용자의 브라우저를 통해 인가 서버의 권한 부여 엔드포인트로 리다이렉션하여 권한 코드 부여 흐름을 시작한다.
+  - ![Image](https://github.com/user-attachments/assets/19092761-7177-45a5-ab6d-b6d6a90746d9)
+- **DefaultOAuth2AuthorizationRequestResolver**
+  - 웹 요청에 대하여 OAuth2AuthorizationRequest 객체를 최종 완성한다
+  - `/oauth2/authorization/{registrationId}` 와 일치하는지 확인해서 일치하면 registrationId를 추출하고 이를 사용해서 ClientRegistration을 가져와 OAuth2AuthorizationRequest 를 빌드한다.
+  - ![Image](https://github.com/user-attachments/assets/b4e000c5-1bc6-4f7c-83b2-3a17cf150597)
+- **OAuth2AuthorizationRequest**
+  - 토큰 엔드포인트 요청 파라미터를 담은 객체로서 인가 응답을 연계하고 검증할 때 사용한다
+  - ![Image](https://github.com/user-attachments/assets/2938c86b-8a5f-4f19-a5cd-8f34b9513fbd)
+- **OAuth2AuthorizationRequestRepository**
+  - 인가 요청을 시작한 시점부터 인가 요청을 받는 시점까지 (리다이렉트) OAuth2AuthorizationRequest 를 유지해준다
+
+### Code를 받아오고 리다이렉트 되는 과정
+
+![Image](https://github.com/user-attachments/assets/5125b6e5-93d9-4d81-8295-fcd667df7c81)
+
+## 2-3). Access Token 교환하기
+
+### 요청 매핑 Url
+
+- RequestMatcher : <b>/login/oauth2/code/\*</b>
+
+### 주요 클래스
+
+- **OAuth2LoginAuthenticationFilter**
+  - 인가서버로부터 리다이렉트 되면서 전달된 code 를 인가서버의 Access Token 으로 교환하고 Access Token 이 저장된 OAuth2LoginAuthenticationToken을 AuthenticationManager에 위임하여 UserInfo 정보를 요청해서 최종 사용자에 로그인한다.
+  - OAuth2AuthorizedClientRepository를 사용하여 OAuth2AuthorizedClient 를 저장한다.
+  - 인증에 성공하면 OAuth2AuthenticationToken 이 생성되고 SecurityContext에 저장되어 인증 처리를 완료한다
+  - ![Image](https://github.com/user-attachments/assets/21b59386-1ba0-4182-9bc3-be2acca01cf2)
+- **OAuth2LoginAuthenticationProvider**
+  - 인가서버로부터 리다이렉트 된 이후 프로세스를 처리하며 Access Token 으로 교환하고 이 토큰을 사용하여 UserInfo 처리를 담당한다
+  - Scope 에 openid 가 포함되어 있으면 OidcAuthorizationCodeAuthenticationProvider 를 호출하고 아니면 OAuth2AuthorizationCodeAuthenticationProvider를 호출하도록 제어한다
+  - ![Image](https://github.com/user-attachments/assets/45ecdfa7-9f2b-4ee1-ac09-86540833bfc0)
+- **OAuth2AuthorizationCodeAuthenticationProvider**
+  - 권한 코드 부여 흐름을 처리하는 AuthenticationProvider
+  - 인가서버에 Authorization Code 와 AccessToken 의 교환을 담당하는 클래스
+  - ![Image](https://github.com/user-attachments/assets/8d19a257-1292-4f8e-8547-a0b590742ee4)
+- **OidcAuthorizationCodeAuthenticationProvider**
+  - OpenID Connect Core 1.0 권한 코드 부여 흐름을 처리하는 AuthenticationProvider 이며 요청 Scope 에 openid 가 존재할 경우 실행된다
+  - ![Image](https://github.com/user-attachments/assets/74e184f0-f74a-4149-a62e-1343d05e0a26)
+- **DefaultAuthorizationCodeTokenResponseClient**
+  - 인가서버의 token 엔드 포인트로 통신을 담당하며 AccessToken 을 받은 후 OAuth2AccessTokenResponse 에 저장하고 반환한다
+  - ![Image](https://github.com/user-attachments/assets/16e8c950-0a93-4683-8c71-618aad96929d)
+
+### 구조
+
+![Image](https://github.com/user-attachments/assets/9673b2a2-dfc6-48f4-8957-8c0200977bb0)
+
+### 흐름
+
+![Image](https://github.com/user-attachments/assets/21348fbb-e3fe-4555-a6f3-1d0cdb3e090f)
+![Image](https://github.com/user-attachments/assets/c36d87a5-1c5b-4d2e-b140-e8ae7126b54b)
+
+## 2-4). Oauth 2.0 User 모델 소개
+
+### 2-4-1). OAuth2UserService
+
+- 액세스 토큰을 사용해서 UserInfo 엔드포인트 요청으로 최종 사용자의 (리소스 소유자) 속성을 가져오며 OAuth2User 타입의 객체를 리턴한다
+- 구현체로 DefaultOAuth2UserService 와 OidcUserService 가 제공된다
+
+- **DefaultOAuth2UserService**
+
+  - 표준 OAuth 2.0 Provider를 지원하는 OAuth2UserService 구현체다
+  - OAuth2UserRequest 에 Access Token 을 담아 인가서버와 통신 후 사용자의 속성을 가지고 온다
+  - 최종 OAuth2User 타입의 객체를 반환한다
+
+- **OidcUserService**
+
+  - OpenID Connect 1.0 Provider를 지원하는 OAuth2UserService 구현체다
+  - OidcUserRequest 에 있는 ID Token 을 통해 인증 처리를 하며 필요시 DefaultOAuth2UserService 를 사용해서 UserInfo 엔드포인트의 사용자 속성을 요청한다
+  - 최종 OidcUser 타입의 객체를 반환한다
+
+- **흐름**
+  ![Image](https://github.com/user-attachments/assets/f5ac8510-c59f-42ed-a353-17092e12e8f8)
+- **구조**
+  ![Image](https://github.com/user-attachments/assets/3a4b9e8d-ccc5-4683-bb7c-2236141c37c0)
+  - DefaultOAuth2UserService 은 OAuth2User 타입의 객체를 반환한다
+  - OidcUserService 은 OidcUser 타입의 객체를 반환한다
+  - OidcUserRequest 의 승인된 토큰에 포함되어 있는 scope 값이 accessibleScopes 의 값 들중 하나 이상 포함되어 있을 경우 UserInfo 엔드 포인트를 요청한다
+
+### 2-4-2). OAuth2User & OidcUser
+
+- **시큐리티는 UserAttributes 및 ID Token Claims 을 집계 & 구성하여 OAuth2User 와 OidcUser 타입의 클래스를 제공한다**
+
+- **OAuth2User**
+
+  - OAuth 2.0 Provider 에 연결된 사용자 주체를 나타낸다
+  - 최종 사용자의 인증에 대한 정보인 Attributes 를 포함하고 있으며 first name, middle name, last name, email, phone number, address 등으로 구성된다
+  - 기본 구현체는 DefaultOAuth2User 이며 인증 이후 Authentication 의 principal 속성에 저장된다
+
+- **OidcUser**
+
+  - OAuth2User 를 상속한 인터페이스이며 OIDC Provider 에 연결된 사용자 주체를 나타낸다
+  - 최종 사용자의 인증에 대한 정보인 Claims 를 포함하고 있으며 OidcIdToken 및 OidcUserInfo 에서 집계 및 구성된다
+  - 기본 구현체는 DefaultOidcUser 이며 DefaultOAuth2User 를 상속하고 있으며 인증 이후 Authentication 의 principal 속성에 저장된다
+
+- **흐름**
+  ![Image](https://github.com/user-attachments/assets/f8dd5d53-0e46-4c5a-bd90-dca17a50d345)
+- **구조**
+  ![Image](https://github.com/user-attachments/assets/35c003b8-8414-4c07-8cdc-3108b70dc956)
+  - OAuth 2.0 로그인을 통해 인증받은 최종 사용자의 Principal 에는OAuth2User 혹은 OidcUser 타입의 객체가 저장된다
+  - 권한 부여 요청 시 scope 파라미터에 openid 를 포함했다면 OidcUser 타입의 객체가 생성되며 OidcUser 는 OidcUserInfo 와 idToken 을 가지고 있으며 최종 사용자에 대한 Claims 정보를 포함하고 있다
+  - OAuth2UserAuthority 는 인가서버로부터 수신한 scope 정보를 집계해서 권한정보를 구성한다
+  - OidcUser 객체를 생성할 때 ID 토큰이 필요한데 이 때 JSON 웹 토큰 (JWT)으로 된 ID 토큰은 JSON Web Signature (JWS)로 서명이 되어 있기 때문에 반드시 정해진 알고리즘에 의한 검증이 성공하면 OidcUser 객체를 생성 해야 한다.
+
+## 2-5). Oauth 2.0 Provider UserInfo 엔드포인트 요청하기
+
+### 요청 Uri
+
+- **POST /userinfo**
+
+### 주요 클래스
+
+- **DefaultOAuth2UserService**
+  - public OAuth2User loadUser(OAuth2UserRequest userRequest)
+- **OAuth2UserRequestEntityConverter**
+  - OAuth2UserRequest 를 RequestEntity 로 컨버터 한다
+  - ![Image](https://github.com/user-attachments/assets/c67e32e0-1cdc-401d-9a50-368ba336533e)
+- **RestOperations**
+  - RequestEntity 로 인가서버에 요청하고 ResponseEntity 로 응답받는다
+  - OAuth2User 타입의 객체를 반환한다
+
+### 흐름
+
+![Image](https://github.com/user-attachments/assets/fc869e5a-30cc-4a3f-8398-7a0a9dd08f56)
+
+## 2-6). OpenID Connect Provider OidcUserInfo 엔드포인트 요청하기
+
+### 요청 Uri
+
+- **POST /userinfo**
+
+### 주요 클래스
+
+- **OidcUserService**
+  - public OidcUser <b>loadUser</b>(OidcUserRequest userRequest)
+    - ![Image](https://github.com/user-attachments/assets/c6ce1150-f0c8-4023-a1a1-bcdbfa26380a)
+  - 내부에 DefaultOAuth2UserService 를 가지고 있으며 OIDC 사양에 부합할 경우 OidcUserRequest 를 넘겨 주어 인가서버와 통신한다
+  - OidcUser 타입의 객체를 반환한다
+
+### 흐름
+
+![Image](https://github.com/user-attachments/assets/fedeafeb-71a7-401d-922c-196760f541c0)
+
+![Image](https://github.com/user-attachments/assets/88ba91e4-1bed-4171-a7be-b5a1db1a369b)
+
+## 2-7). OpenID Connect 로그아웃
+
+### 개념
+
+- 클라이언트는 로그아웃 엔드포인트를 사용하여 웹 브라우저에 대한 세션과 쿠키를 지운다.
+- 클라이언트 로그아웃 성공 후 OidcClientInitiatedLogoutSuccessHandler 를 호출하여 OpenID Provider 세션 로그아웃 요청한다
+- OpenID Provider 로그아웃이 성공하면 지정된 위치로 리다이렉트 한다
+- 인가서버 메타데이터 사양에 있는 로그아웃 엔드 포인트는 end_session_endpoint 로 정의되어 있다
+  - endSessionEndpoint = http://localhost:8080/realms/oauth2/protocol/openid-connect/logout
+
+### API 설정
+
+```java
+http
+    .logout()
+    .logoutSuccessHandler(oidcLogoutSuccessHandler())
+    .invalidateHttpSession(true)
+    .clearAuthentication(true)
+    .deleteCookies("JSESSIONID");
+```
+
+```java
+private OidcClientInitiatedLogoutSuccessHandler oidcLogoutSuccessHandler() {
+	OidcClientInitiatedLogoutSuccessHandler successHandler =
+		new OidcClientInitiatedLogoutSuccessHandler(clientRegistrationRepository);
+	successHandler.setPostLogoutRedirectUri("http://localhost:8081/login");
+	return successHandler;
+}
+```
+
+![Image](https://github.com/user-attachments/assets/7388fa25-7bc7-46f8-a49c-816481fc769f)
+
+## 2-8). Spring MVC 인증 객체 참조하기
+
+### Authentication
+
+- public void dashboard(<b>Authentication authentication</b>) {}
+  - oauth2Login() 로 인증을 받게 되면 Authentication 은 OAuth2AuthenticationToken 타입의 객체로 바인딩 된다
+  - principal 에는 OAuth2User 타입 혹은 OidcUser 타입의 구현체가 저장 된다.
+  - DefaultOAuth2User 는 /userInfo 엔드포인트 요청으로 받은 User 클레임 정보로 생성된 객체이다
+  - DefaultOidcUser 는 OpenID Connect 인증을 통해 ID Token 및 클레임 정보가 포함된 객체이다
+
+### @AuthenticationPrincipal
+
+- public void dashboard(<b>@AuthenticationPrincipal OAuth2User principal or OidcUser principal</b>) {}
+- AuthenticationPrincipalArgumentResolver 클래스에서 요청을 가로채어 바인딩 처리를 한다.
+  - Authentication 를 SecurityContex 로부터 꺼내어 와서 Principal 속성에 OAuth2User 혹은 OidcUser 타입의 객체를 저장한다
+
+# 3. API 커스텀 설정
+
+## 3-1). Authorization BaseUrl & Redirection BaseUrl
+
+```java
+http
+	.oauth2Login(oauth2 -> oauth2
+		.loginPage("/login")
+		.loginProcessingUrl("/login/v1/oauth2/code/*")
+		.authorizationEndpoint(authorizationEndpointConfig ->
+			authorizationEndpointConfig.baseUri("/oauth2/v1/authorization"))
+		.redirectionEndpoint(redirectionEndpointConfig ->
+			redirectionEndpointConfig.baseUri("/login/v1/oauth2/code/*"))
+	)
+;
+```
+
+- authorizationEndpoint().<b>baseUrl(“/oauth2/v1/authorization”)</b> 은 권한 부여 요청 BaseUri 를 커스텀 한다
+  - 1단계 권한 부여 요청을 처리하는 OAuth2AuthorizationRequestRedirectFilter 에서 요청에 대한 매칭여부를 판단한다
+  - 설정에서 변경한 값이 클라이언트의 링크 정보와 일치하도록 맞추어야 한다
+  - ![Image](https://github.com/user-attachments/assets/1ef386b8-2d5b-42b6-b85a-ed11d6a420e8)
+- <b>redirectionEndpoint.baseUri("/login/v1/oauth2/code/\*")</b> 은 인가 응답의 baseUri 를 커스텀 한다
+  - Token 요청을 처리하는 OAuth2LoginAuthenticationFilter 에서 요청에 대한 매칭여부를 판단한다
+    - application.yml 설정 파일에서 registration 속성의 redirectUri 설정에도 변경된 값을 적용해야 한다
+    - 인가서버의 redirectUri 설정에도 변경된 값을 적용해야 한다
+  - loginProcessingUrl("/login/v1/oauth2/code/\*") 를 설정해도 결과는 동일하지만 redirectionEndpoint.baseUri 가 더 우선이다
+  - ![Image](https://github.com/user-attachments/assets/0db9e189-b71d-4d77-bd61-7868453c7452)
+
+## 3-2). OAuth2AuthorizationRequestResolver
+
+- Authorization Code Grant 방식에서 클라이언트가 인가서버로 권한부여 요청할 때 실행되는 클래스
+- OAuth2AuthorizationRequestResolver 는 OAuth 2.0 인가 프레임워크에 정의된 표준 파라미터 외에 다른 파라미터를 추가하는 식으로 인가 요청을 할 때 사용한다
+- DefaultOAuth2AuthorizationRequestResolver 가 디폴트 구현체로 제공 되며 Consumer`<OAuth2AuthorizationRequest.Builder>` 속성에 커스텀 할 내용을 구현한다
+
+```java
+@Bean
+SecurityFilterChain oauth2SecurityFilterChain(HttpSecurity http) throws Exception {
+	http.authorizeRequests((requests) -> requests.antMatchers("/home").permitAll()
+		.anyRequest().authenticated());
+	http.oauth2Login(authLogin ->
+		authLogin.authorizationEndpoint(authEndpoint ->
+			authEndpoint.authorizationRequestResolver(customOAuth2AuthenticationRequestResolver())));
+	return http.build();
+}
+
+private OAuth2AuthorizationRequestResolver customOAuth2AuthenticationRequestResolver() {
+	return new CustomOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+}
+```
+
+![Image](https://github.com/user-attachments/assets/ae998a25-1aed-4b84-b57c-3090e88e6d61)
+
+![Image](https://github.com/user-attachments/assets/4ddbe990-bc15-4e17-a3b5-50f17577c43f)

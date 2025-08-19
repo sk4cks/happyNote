@@ -1,0 +1,49 @@
+---
+title: '🔦[스프링 시큐리티 OAuth2] HttpBasic 인증'
+date: 2024-11-14
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# HttpBasic 인증
+
+- HTTP 는 액세스 제어와 인증을 위한 프레임워크를 제공하며 가장 일반적인 인증 방식은 "Basic" 인증 방식이다
+- RFC 7235 표준이며 인증 프로토콜은 HTTP 인증 헤더에 기술되어 있다
+
+![image](https://github.com/user-attachments/assets/7a9411d6-c4c8-4cad-9153-c0653ee271b4)
+
+1. 클라이언트는 인증정보 없이 서버로 접속을 시도한다
+2. 서버가 클라이언트에게 인증요구를 보낼 때 401 Unauthorized 응답과 함께 WWW-Authenticate 헤더를 기술해서 realm(보안영역) 과 Basic 인증방법을 보냄
+3. 클라이언트가 서버로 접속할 때 Base64 로 username 과 password 를 인코딩하고 Authorization 헤더에 담아서 요청함
+4. 성공적으로 완료되면 정상적인 상태 코드를 반환한다.
+
+# HttpBasicConfigurer & BasicAuthenticationFilter
+
+## HttpBasicConfigurer
+
+- HTTP Basic 인증에 대한 초기화를 진행하며 속성들에 대한 기본값들을 설정한다
+- 기본 AuthenticationEntryPoint 는 BasicAuthenticationEntryPoint 이다
+- 필터는 BasicAuthenticationFilter 를 사용한다
+
+## BasicAuthenticationFilter
+
+- 이 필터는 기본 인증 서비스를 제공하는 데 사용된다
+- BasicAuthenticationConverter 를 사용해서 요청 헤더에 기술된 인증정보의 유효성을 체크하며 Base64 인코딩된 username 과 password 를 추출한다
+- 인증이 성공하면 Authenticatoin 이 SecurityContext 에 저장되고 인증이 실패하면 Basic 인증을 통해 다시 인증하라는 메시지를 표시하는 BasicAuthenticationEntryPoint 가 호출된다
+- 인증 이후 세션을 사용하는 경우와 사용하지 않는 경우에 따라 처리되는 흐름에 차이가 있다.
+  세션을 사용하는 경우 매 요청 마다 인증과정을 거치지 않으나 세션을 사용하지 않는 경우 매 요청마다 인증과정을 거쳐야 한다
+
+## API
+
+![image](https://github.com/user-attachments/assets/cf1ebb98-1b59-41af-9bbb-5c0d66ff2fcc)
+
+## 흐름도
+
+![image](https://github.com/user-attachments/assets/0744bac9-99ae-4e27-a36c-7dc29c8a87e9)

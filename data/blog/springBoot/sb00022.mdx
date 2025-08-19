@@ -1,0 +1,173 @@
+---
+title: '🆑[스프링 시큐리티 OAuth2] OAuth 2.0 Client Fundamentals'
+date: 2024-12-22
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# application.yml / OAuth2ClientProperties
+
+## 클라이언트 권한 부여 요청 시작
+
+1. 클라이언트가 인가서버로 권한 부여 요청을 하거나 토큰 요청을 할 경우 클라이언트 정보 및 엔드포인트 정보를 참조해서 전달한다
+2. application.yml 환경설정 파일에 클라이언트 설정과 인가서버 엔드포인트 설정을 한다
+3. 초기화가 진행되면 application.yml 에 있는 클라이언트 및 엔드포인트 정보가 OAuth2ClientProperties 의 각 속성에 바인딩 된다
+4. OAuth2ClientProperties 에 바인딩 되어 있는 속성의 값은 인가서버로 권한부여 요청을 하기 위한 ClientRegistration 클래스의 필드에 저장된다
+5. OAuth2Client 는 ClientRegistration 를 참조해서 권한부여 요청을 위한 매개변수를 구성하고 인가서버와 통신한다
+
+![image](https://github.com/user-attachments/assets/ed8bafa9-db43-4ff9-a9f7-8bf44a921908)
+
+## application.yml
+
+```yaml
+spring:
+  security:
+    oauth2:
+      client:
+        registration: ## 클라이언트 설정
+          keycloak:
+            authorization-grant-type: authorization_code # OAuth 2.0 권한 부여 타입
+            client-id: oauth2-client-app # 서비스 공급자에 등록된 클라이언트 아이디
+            client-name: oauth2-client-app # 클라이언트 이름
+            client-secret: tynI8eYUw4H1fJYxwLQ36XhFC1Ge1w1x # 서비스 공급자에 등록된 클라이언트 비빌번호
+            redirect-uri: http://localhost:8081/login/oauth2/code/keycloak # 인가서버에서 권한 코드 부여 후 클라이언트로 리다이렉트하는 위치
+            clientAuthenticationMethod: client_secret_post # 클라이언트 자격증명 전송방식
+            scope: openid,email # 리소스에 접근 제한 범위
+        provider: ## 공급자 설정
+          keycloak:
+            authorization-uri: http://localhost:8080/realms/oauth2/protocol/openid-connect/auth # OAuth 2.0 권한 코드 부여 엔드 포인트
+            issuer-uri: http://localhost:8080/realms/oauth2 # 서비스 공급자 위치
+            jwk-set-uri: http://localhost:8080/realms/oauth2/protocol/openid-connect/certs # OAuth 2.0 JwkSetUri 엔드 포인트
+            token-uri: http://localhost:8080/realms/oauth2/protocol/openid-connect/token # OAuth 2.0 토큰 엔드 포인트
+            user-info-uri: http://localhost:8080/realms/oauth2/protocol/openid-connect/userinfo # OAuth 2.0 UserInfo 엔드 포인트
+            user-name-attribute: preferred_username # OAuth 2.0 사용자명을 추출하는 클레임명
+```
+
+## OAuth2ClientProperties (prefix = "spring.security.oauth2.client“)
+
+![image](https://github.com/user-attachments/assets/ab54d485-a93a-40d2-81d1-e179b90556cc)
+
+- <b>Registration</b> 은 인가 서버에 등록된 클라이언트 및 요청 파라미터 정보를 나타낸다
+- <b>Provider</b> 는 공급자에서 제공하는 엔드포인트 등의 정보를 나타낸다
+- 클라이언트 및 공급자의 정보를 registration / provider 맵에 저장하고 인가서버와의 통신 시 각 항목을 참조하여 사용한다
+
+# ClientRegistration
+
+## 개념
+
+- OAuth 2.0 또는 OpenID Connect 1.0 Provider 에서 클라이언트의 등록 정보를 나타낸다
+- ClientRegistration 은 OpenID Connect Provider의 설정 엔드포인트나 인가 서버의 메타데이터 엔드포인트를 찾아 초기화할 수 있다.
+- ClientRegistrations의 메소드를 사용하면 아래 예제처럼 편리하게 ClientRegistration 을 설정할 수 있다
+  - ClientRegistration clientRegistration = ClientRegistrations.fromIssuerLocation(“https://idp.example.com/issuer”).build();
+  - 위 코드는 200 응답을 받을 때까지 https://idp.example.com/issuer/.well-known/openid-configuration, https://idp.example.com/.well-known/oauth-authorization-server 에 차례대로 질의해본다.
+
+![image](https://github.com/user-attachments/assets/e3498914-8272-4d71-bc0d-4bf3500cf6b1)
+
+![image](https://github.com/user-attachments/assets/e7007d9e-18e7-41cd-b564-b266c86df054)
+
+- <b>registrationId</b> : ClientRegistration을 식별할 수 있는 유니크한 ID.
+- <b>clientId</b> : 클라이언트 식별자.
+- <b>clientSecret</b> : 클라이언트 secret.
+- <b>clientAuthenticationMethod</b> : provider에서 클라이언트를 인증할 때 사용할 메소드로서 basic, post, none (public 클라이언트) 을 지원한다.
+- <b>authorizationGrantType</b> : OAuth 2.0 인가 프레임워크는 네 가지 권한 부여 타입을 정의하고 있으며 지원하는 값은 authorization_code, implicit, client_credentials, password다.
+- <b>redirectUriTemplate</b> : 클라이언트에 등록한 리다이렉트 URL로, 사용자의 인증으로 클라이언트에 접근 권한을 부여하고 나면, 인가 서버가 이 URL로 최종 사용자의 브라우저를 리다이렉트시킨다.
+- <b>scopes</b> : 인가 요청 플로우에서 클라이언트가 요청한 openid, 이메일, 프로필 등의 scope.
+- <b>clientName</b> : 클라이언트를 나타내는 이름으로 자동 생성되는 로그인 페이지에서 노출하는 등에 사용한다.
+- <b>authorizationUri</b> : 인가 서버의 인가 엔드포인트 URI.
+- <b>tokenUri</b> : 인가 서버의 토큰 엔드포인트 URI.
+- <b>jwkSetUri</b> : 인가 서버에서 JSON 웹 키 (JWK) 셋을 가져올 때 사용할 URI. 이 키 셋엔 ID 토큰의 JSON Web Signature (JWS) 를 검증할 때 사용할 암호키가 있으며, UserInfo 응답을 검증할 때도 사용할 수 있다.
+- <b>configurationMetadata</b> : OpenID Provider 설정 정보로서 application.properties 에spring.security.oauth2.client.provider.[providerId].issuerUri를 설정했을 때만 사용할 수 있다.
+- <b>(userInfoEndpoint)uri</b> : 인증된 최종 사용자의 클레임/속성에 접근할 때 사용하는 UserInfo 엔드포인트 URI.
+- <b>(userInfoEndpoint)authenticationMethod</b> : UserInfo 엔드포인트로 액세스 토큰을 전송할때 사용할 인증 메소드. header, form, query 를 지원한다.
+- <b>userNameAttributeName</b> : UserInfo 응답에 있는 속성 이름으로, 최종 사용자의 이름이나 식별자에 접근할 때 사용한다
+
+![image](https://github.com/user-attachments/assets/fe537698-3ad7-4770-a2b8-2faf7058cbbc)
+
+## CommonOAuth2Provider
+
+![image](https://github.com/user-attachments/assets/5c4b429d-7117-4972-a9f8-8c39d8334266)
+
+- OAuth 2.0 공급자 정보를 제공하는 클래스로서 글로벌 서비스 제공자 일부는 기본으로 제공되어진다
+- Client ID 와 Client Secret 는 별도로 application.properties 에 작성해야 한다.
+- Naver 나 Kakao 와 같은 국내 공급자 정보는 위의 모든 항목을 수동으로 작성해서 사용해야 한다
+- 클라이언트 기준인 Registration 항목과 서비스 제공자 기준인 Provider 항목으로 구분하여 설정한다
+- application.properties 가 아닌 Java Config 방식으로 ClientRegistration 등록을 설정 할 수 있다
+- ClientRegistration 객체를 생성할 수 있는 빌더 클래스를 반환한다
+
+## ClientRegistrationRepository
+
+### 개념
+
+- ClientRegistrationRepository 는 OAuth 2.0 & OpenID Connect 1.0 의 ClientRegistration 저장소 역할을 한다.
+- 클라이언트 등록 정보는 궁극적으로 인가 서버가 저장하고 관리하는데 이 레포지토리는 인가 서버에 일차적으로 저장된 클라이언트 등록 정보의 일부를 검색하는 기능을 제공한다.
+- 스프링 부트 2.X 자동 설정은 spring.security.oauth2.client.registration.[registrationId] 하위 프로퍼티를 ClientRegistration 인스턴스에 바인딩하며, 각 ClientRegistration객체를 ClientRegistrationRepository 안에 구성한다.
+- ClientRegistrationRepository 의 디폴트 구현체는 InMemoryClientRegistrationRepository 다.
+- 자동 설정을 사용하면 ClientRegistrationRepository 도 ApplicationContext 내 @Bean 으로 등록하므로 필요하다면 원하는 곳에 의존성을 주입할 수 있다.
+
+  - 의존성 주입 예시
+
+    ```java
+    @RestController
+    public class IndexPageController {
+
+        @Autowired
+        private ClientRegistrationRepository clientRegistrationRepository;
+
+        @GetMapping("/")
+        public String index() {
+            ClientRegistration clientRegistration =
+                this.clientRegistrationRepository.findByRegistrationId("keycloak");
+            ...
+
+            return "index";
+        }
+
+    }
+    ```
+
+## ClientRegistration / ClientRegistrationRepository 빈 등록하기
+
+```java
+@Bean
+public ClientRegistrationRepository clientRegistrationRepository() {
+	return new InMemoryClientRegistrationRepository(this. keycloakClientRegistration());
+}
+
+private ClientRegistration keycloakClientRegistration() {
+	return ClientRegistration.withRegistrationId("keycloak")
+		.clientId("keycloak-client-id")
+		.clientSecret(" keycloak-client-secret")
+		.clientAuthenticationMethod(ClientAuthenticationMethod.BASIC)
+		.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+		.redirectUriTemplate("{baseUrl}/login/oauth2/code/{registrationId}")
+		.scope("openid", "profile", "email", "address", "phone")
+		.authorizationUri("http://localhost:8080/realms/oauth2")
+		.tokenUri("http://localhost:8080/realms/oauth2/token")
+		.userInfoUri("http://localhost:8080/realms/oauth2/userinfo")
+		.userNameAttributeName(IdTokenClaimNames.SUB)
+		.jwkSetUri("http://localhost:8080/realms/oauth2/certs")
+		.clientName(“Keycloak")
+		.build();
+}
+```
+
+# AuthenticationEntryPoint
+
+![image](https://github.com/user-attachments/assets/61f8b3cd-c128-47a3-8894-eb9588ae027a)
+
+# 자동설정에 의한 초기화 과정
+
+## OAuth2ImportSelector
+
+![image](https://github.com/user-attachments/assets/48fbef5e-4e7c-49a5-ae27-1af9170531bc)
+
+## OAuth2ClientAutoConfiguration
+
+![image](https://github.com/user-attachments/assets/2fd36dd2-2717-45cc-92bd-cea7352130ac)

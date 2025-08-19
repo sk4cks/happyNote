@@ -1,0 +1,434 @@
+---
+title: '🖋️[스프링 시큐리티 OAuth2] 토큰 검증 구현'
+date: 2025-07-20
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. JCA & JCE
+
+## 1-1. 소개 및 구조
+
+### ✓ JCA (Java Cryptography Architecture) & JCE (Java Cryptography Extention) 소개
+- 자바는 JCA & JCE 프레임워크 를 통해 자체적인 보안 관련 기능을 제공하고 있으며 전자서명(Digital Signature), 메시지 다이제스트(Message Digest, hashs), 인증서와 인증서 유효성 검사(Certificate Validation), 키 생성 및 관리 그리고 보안 랜덤 수(Secure Random Number) 생성 등 현대 정보 통신 암호 기술 중에서 필수적인 것은 모두 제공하고 있다
+- **JCA & JCE 프레임워크는 프로바이더 보안 구조를 사용하여 보안과 관련한 다양한 API를 제공하고 있다**
+- 프로바이더는 java.security.Provider 클래스의 구현체로 보안 알고리즘 구현체 목록을 포함하고 있고 이를 통해 보안 서비스를 구현할 수 있다.
+- 예를 들어 특정 알고리즘의 인스턴스가 필요해지면, JCA & JCE 프레임워크는 프로바이더 저장소에서 해당 알고리즘의 적합한 구현체 클래스를 찾아 클래스 인스턴스를 생성하는데 프로바이더를 직접 지정할 수도 있다
+<img src="/static/images/springBoot/image00000011.png" />
+
+### ✓ MessageDigest
+- 메시지 다이제스트의 목적은 원본 파일이 그대로인지 파악하는 무결성 검사이다.
+- 메시지 다이제스트 알고리즘은 입력 값으로 전달된 다양한 길이의 원본 값을 고정 길이 해시 값으로 출력한다.
+- 이 알고리즘은 단방향이기 때문에 해시 값에서 거꾸로 원본 값을 도출할 수 없다.
+<img src="/static/images/springBoot/image00000012.png" />
+- 갑과 을의 교신 상황에서 갑은 을에게 전달하고자 하는 원본과 그 원본의 메시지 해시 값 그리고 메시지 다이제스트 알고리즘을 보낸다.
+- 을은 갑이 전달한 알고리즘과 원본을 가지고 메시지 해시 값을 계산한다.
+- 을이 계산한 메시지 해시 값과 갑이 전달한 메시지 해시 값이 일치하면, 갑이 전달한 원본이 네트워크를 통해 을에게 오기까지 변경되지 않았다는 것을 확인할 수 있다.
+
+### ✓ Signature
+- Signature는 초기화 시 제공받은 키를 사용해서 데이터를 서명하고 전자 서명의 유효성을 검증 하는데 사용된다.
+<img src="/static/images/springBoot/image00000013.png" />
+
+- **서명**
+  - Signature 객체는 개인 키로 서명 하기 위해 초기화되고 서명할 원본 데이터가 제공된다.
+  - Signature 의 sign() 은 개인 키로 원본 데이터를 서명 하면 해시된 데이터를 암호화한 Signature Bytes 를 반환한다
+  
+- **검증**
+  - 검증이 필요한 경우 검증을 위해 Signature객체를 생성 및 초기화하고 개인키와 쌍을 이루는 해당 공개 키를 제공한다.
+  - 원본 데이터와 Signature Bytes 가 검증 Signature 객체에 전달되고 verify() 를 실행하면 공개키로 Signature Bytes 의 해시데이터를 추출하고 원본데이터를 해시한 값과 비교해서 일치하면 Signature 객체가 성공을 보고한다.
+<br/><br/>
+
+- 서명은 메시지 다이제스트와 비대칭키 암호화가 결합한 형태로서 "SHA256WithRSA” 처럼 메시지 다이제스트 알고리즘인 "SHA256"을 사용하여 초기에 대규모 데이터를 보다 관리하기 쉬운 고정길이의 형식으로 "압축"한 다음 비대칭키 암호화인 "RSA" 알고리즘으로 고정길이의 32바이트 메시지 다이제스트에 서명한다
+
+### ✓ JCA & JCE 구조
+- **Cipher**
+  - 암호화 및 복호화에 사용되는 암호화 암호의 기능을 제공한다.
+  - 암호화는 일반 텍스트와 키 를 가져와 암호화된 데이터를 생성하는 프로세스임.
+  - 복호화는 암호화된 데이터와 키를 가져와서 일반 텍스트를 생성하는 역 과정이다.
+
+  - **Cipher 객체 인스턴스화하기**
+    - 인스턴스 생성 시 변환을 지정하는데 변환은 [암호화 알고리즘/피드백 모드/패딩] or [암호화 알고리즘] 으로 지정한다
+      - Cipher c1 = Cipher.getInstance("RSA/ECB/OAEPWithSHA1AndMGF1Padding");
+      - Cipher c1 = Cipher.getInstance("RSA");
+<br/><br/>
+
+  - **Cipher 초기화하기**
+    - Cipher 객체를 초기화하기 위해서 Cipher의 작동 모드를 나타내는 opmode 와 Key 또는 증명서(Certificate) 를 인자로 전달하고 init() 메서드를 실행한다
+    - opmode
+      - ENCRYPT_MODE: cipher 객체를 암호화 모드로 초기화한다.
+      - DECRYPT_MODE: cipher 객체를 복호화 모드로 초기화한다.
+    - Cipher cipher = Cipher.getInstance("RSA");
+    - cipher.init(Cipher.ENCRYPT_MODE, PrivateKey);
+    <img src="/static/images/springBoot/image00000014.png" />
+
+## 1-2. 대칭키 & 비대칭키
+
+### ✓ 대칭키 암호(symmetric-key algorithm)
+- 암호화 알고리즘의 한 종류로, 암호화와 복호화에 같은 암호 키를 쓰는 알고리즘을 의미한다.
+- 대칭 키 암호에서는 암호화를 하는 측과 복호화를 하는 측이 같은 암호 키를 공유해야 한다.
+- 비대칭 키 암호에서 공개 키와 비밀 키를 별도로 가지는 것과 구별되며 대부분의 대칭 키 암호는 비대칭 키 암호와 비교하여 계산 속도가 빠르다는 장점을 가진다.
+
+- **MAC(Message Authentication Code)**
+  - 메시지 인증 코드는 데이터가 변조(수정, 삭제, 삽입 등) 되었는지를 <span style={{color: 'red'}}>검증</span>할 수 있도록 데이터에 덧붙이는 코드
+  - 해시 값을 생성한다는 점에서 메시지 다이제스트와 비슷하지만, 초기화 시 비밀키(SecretKey, 대칭키)를 요구한다는 점에서 다르다.
+  - 메시지 다이제스트는 받은 측이 누구든 무결성 검사가 가능하지만, MAC은 오직 동일한 비밀 키를 가진 쪽에서만 전달받은 메시지의 무결성을 검사 할 수 있다.
+  - 암호화 해시 함수(MD5, SHA256 등)를 기반으로 하는 MAC이 잘 알려진 HMAC이다.
+  - HMAC은 메시지 다이제스트 알고리즘과 공유된 비밀 키의 조합으로 가능하며 데이터의 무결성과 기밀성, 송.수신자간 인증을 보증하기 위한 암호화 기법이다
+  <img src="/static/images/springBoot/image00000015.png" />
+
+### ✓ 비 대칭키 암호 (asymmetric-key algorithm)
+- 암호화 알고리즘의 한 종류로, 암호화와 복호화에 다른 암호 키를 쓰는 알고리즘을 의미한다.
+- 외부에 절대 노출되어서는 안되는 개인키(Private key)와 공개적으로 개방되어 있는 공개키(Private key)를 쌍으로 이룬 형태이다
+  - A의 공개키를 이용하여 암호화된 데이터는 A의 개인키로만 복호화가 가능하다.
+  - A의 개인키를 이용하여 암호화된 데이터는 A의 공개키로만 복호화가 가능하다.
+- 비대칭키를 사용하여 두가지 암호학적 문제를 해결할 수 있다
+  1. 데이터 보안 : 송신자 공개키로 암호화 -> 송신자 개인키로 복호화를 통해 데이터를 안전하게 전송할 수 있는 보안 관점
+  2. 인증 : 송신자 개인키로 암호화 -> 송신자 공개키로 복호화를 통해 메시지를 인증(부인방지)하는 것이 목적
+<br/><br/>
+
+- RSA (Ron <span style={{color: 'red'}}>R</span>ivest, Adi <span style={{color: 'red'}}>S</span>hamir, Leonard <span style={{color: 'red'}}>A</span>dleman 세 사람의 성을 따서 RSA 라고 이름이 붙은 암호 방식)
+  - 현재 SSL/TLS에 가장 많이 사용되는 공개키 암호화 알고리즘으로 전세계 대부분의 인터넷 뱅킹(대한민국 포함)이 이 RSA-2048 암호화를 사용한다.
+  <img src="/static/images/springBoot/image00000016.png" />
+
+### ✓ Key 생성 모델
+- **Key**
+  - JCA에서 지원하는 모든 종류의 키에 대한 최상위 인터페이스
+  - Key 인터페이스는 getAlgorithm(), getEncoded(), getFormat() 의 세 가지 메서드를 제공한다
+    - getAlgorithm() : 키 알고리즘은 보통 대칭키 암호 방식(AES,DSA 등) 또는 비대칭키 연산 알고리즘(RSA)이다.
+    - getEncoded() : 기본 인코딩된 형식의 키를 반환
+    - getFormat() : 이 키의 기본 인코딩 형식의 이름을 반환(표준형식인 X509 또는 PKCS8)
+- **KeyPair**
+  - 키 쌍(공개 키와 개인 키)을 보관하고 접근할 수 있는 기능만 제공한다
+- **KeyPairGenerator**
+  - 공개 및 개인 키 쌍을 생성하는 데 완전히 새로운 객체를 생성한다
+- **KeyFactory**
+  - 어떤 키 데이터 객체를 다른 타입의 키 데이터 객체로 전환하는데 사용한다
+
+### ✓ Key 계층 구조
+<img src="/static/images/springBoot/image00000017.png" />
+
+# 2. JWT (JSON Web Token)
+
+## 2-1. 소개 및 특징
+
+### ✓ JOSE (JSON Object Signing and Encryption)
+- **JSON 데이터의 컨텐츠를 암호화 또는 서명의 형태로 나타내기 위해 IETF에서 표준화 한 소프트웨어 기술 세트**
+- **기술에는 다음 사양이 포함된다**
+  1. **JWT (JSON Web Token, RFC7519)**
+    - 클레임 기반 보안 값을 나타내는 방법으로 두 당사자 간에 안전하게 전달되는 클레임을 표현하기 위한 개방형 표준
+    - JWT는 인증, 권한 부여 및 정보 교환에 사용된다
+    - JWS 또는 JWE 방식으로 구현된다
+  2. **JWS (JSON WEB SIGNITURE, RFC 7515)**
+    - JSON을 사용하여 디지털 서명 또는 MAC으로 보안된 콘텐츠를 표현하는 방법
+  3. **JWE (JSON WEB ENCRYPTION, RFC 7516)**
+    - JSON을 사용하여 의도한 수신자만 읽을 수 있도록 암호화된 데이터(토큰)를 나타내는 형식
+  4. **JWK (JSON WEB KEY, RFC 7517)**
+    - HMAC 이나 타원 곡선 또는 RSA 알고리즘을 사용하여 공개 키 세트를 JSON 객체로 나타내는 JSON 구조
+  5. **JWA (JSON WEB ALGORITHM, RFC 7518)**
+    - JWS, JWK 및 JWE에 필요한 알고리즘 목록으로 JWS 헤더 및 JWS 페이로드의 내용을 서명하는 데 사용된다
+
+<img src="/static/images/springBoot/image00000018.png" />
+
+### ✓ JWS 구조
+- **JOSE Header**
+  - 일반적으로 JWT인 토큰 유형과 HMAC SHA256 또는 RSA 와 같은 서명 알고리즘의 두 부분으로 구성된다
+  - Base64Url 로 인코딩되어 JSON 웹 토큰의 첫 번째 부분을 형성한다
+- **Payload** (JWT Claim Set)
+  - 토큰에 포함할 내용인 클레임을 포함하는 페이로드로서 표준 필드인 7개의 등록 클레임 이름(Registered Claim Names) 및 사용자 지정 클레임 등으로 구성한다
+  - Base64Url 로 인코딩되어 JSON 웹 토큰의 두 번째 부분을 형성한다
+- **Signiture**
+  - 서명은 Base64url 인코딩을 이용하여 헤더와 페이로드를 인코딩하고 이 둘을 점(.) 구분자로 함께 연결시킴으로써 계산되어 토큰을 안전하게 확인한다.
+
+<img src="/static/images/springBoot/image00000019.png" />
+
+### ✓ Claims
+- **개념**
+  - 클레임(claim) 은 주장하고자 하는 정보를 나타내는 것으로 이 정보를 모두 가지고 있는 바디 부분을 Claim Set 이라고 부른다.
+  - Claim Set은 키 부분인 Claim Name과 값 부분인 Claim Value의 여러 쌍으로 이루어져 있다. 
+  - JWT 에는 여러개의 클레임들을 넣을 수 있다
+
+<img src="/static/images/springBoot/image00000020.png" />
+
+### ✓ JWT
+<img src="/static/images/springBoot/image00000021.png" />
+<img src="/static/images/springBoot/image00000022.png" />
+
+### ✓ 데이터 무결성과 취약점
+1. Payload 의 클레임 값을 변조하여 토큰을 생성한 후 전달하더라도 서명에서 해시된 값과 변조된 값의 해시된 값이 서로 일치하지 않기 때문에 검증이 실패하여 데이터의 안전성을 보장한다
+2. SecretKey 를 탈취당했을 경우에는 중요한 정보가 도난당할 수 있는 취약점이 발생하기 때문에 SecretKey 를 주기적으로 변경하도록 하는 key rotation( key rolling) 정책이 필요할 수 있다
+
+## 2-2. JWK 이해
+
+### ✓ JWK 개념
+- 암호화 키를 저장하는 방식으로 인가서버에서 발행하는 JWT 토큰의 암호화 및 서명에 필요한 암호화 키의 다양한 정보를 담은 JSON 객체 표준이다
+- JwkSetUri 정보를 설정하면 인가서버로부터 JWK 형태의 정보를 다운로드할 수 있고 JWT 를 검증할 수 있다.
+
+### ✓ JWK 구조
+<img src="/static/images/springBoot/image00000023.png" />
+
+### ✓ JWK 확장
+- 자바 표준 보안 클래스를 사용하여 대칭키, 비대칭키 방식의 JWT 의 암호화 및 전자서명, 이후 검증을 위한 키 생성, 변환 등을 지원한다
+- 구현체로서 **RSAKey, OctetSequenceKey, ECKey, OctetKeyPair** 가 있다
+  <img src="/static/images/springBoot/image00000024.png" />
+
+### ✓ JWKGenerator`<T extends JWK>`
+<img src="/static/images/springBoot/image00000025.png" />
+
+- **암호화 알고리즘 방식에 따라 JWK 의 구현체가 있고 각 구현체를 편리하게 생성할 수 있는 제너레이터 클래스이다**
+  - RSAKeyGenerator – 비대칭 암호화 알고리즘 키를 포함하는 JWK 생성기
+  - OctetSequenceKeyGenerator - 대칭 암호화 알고리즘 키를 포함하는 JWK 생성기
+  - EcKeyGenerator - 타원곡선 암호화 알고리즘 키 포함하는 JWK 생성기
+
+# 3. OAuth2 MAC & RSA 검증
+
+## 3-1. 기본 환경 및 공통 클래스 구성
+
+### ✓ 토큰 검증 방법
+- **토큰 검증에 대한 다양한 케이스의 테스트를 위해 두 가지 방식으로 토큰 발행 및 검증을 진행하도록 한다.**<br/>
+  ① 암호화 알고리즘 방식에 따라 직접 발행한 JWT 토큰을 대상으로 검증을 진행한다<br/>
+  ② 인가 서버에서 발행한 Access Token 을 대상으로 검증을 진행한다<br/>
+
+  ✓ JwtDecoder 빈은 암호화 알고리즘 및 특정한 조건에 따라 각 생성되며 디코딩이 진행되면 주어진 알고리즘에 의해 검증하게 된다
+  <img src="/static/images/springBoot/image00000026.png" />
+
+### ✓ 토큰 검증 테스트
+1. **MAC 방식에 의한 검증 테스트**<br/>
+   ① 자체 토큰 발행 및 검증<br/>
+   ② SecretKey 설정에 의한 검증<br/>
+2. **RSA 방식에 의한 검증 테스트**<br/>
+   ① 자체 토큰 발행 및 검증<br/>
+   ② JwtDecoder 에 의한 검증<br/>
+   ③ KeyStore 툴에 의한 검증<br/>
+   ④ JwkSetUri 설정에 의한 검증<br/>
+
+### ✓ 패키지 구성
+- io.oauth2.resourceserver.configs – 설정클래스
+- Io.oauth2.resourceserver.filter.authentication – 인증필터(토큰 발행 담당)
+- Io.oauth2.resourceserver.filter.authorization – 인가필터(토큰 검증 담당)
+- Io.oauth2.resourceserver.signature – 토큰 서명 및 발행
+- Io.oauth2.resourceserver.controller – 컨트롤러
+- io.oauth2.resourceserver.dto – 요청 파라미터 객체
+- io.oauth2.resourceserver.init – 초기화 작업
+
+### ✓ 기본 클래스 생성
+- OAuth2ResourceServer – 리소스 서버 설정클래스
+- IndexController – 컨트롤러
+
+### ✓ 환경설정
+- application.yml
+
+### ✓ 의존성 추가
+- gradle
+
+### ✓ SignatureConfig
+- 서명과 검증, MAC 및 RSA 암호화 JWK 등의 빈들을 생성하는 설정 클래스
+
+### ✓ JwtAuthenticationFilter
+- 인가서버를 대신하여 토큰을 발행하는 커스텀 필터로서 UsernamePasswordAuthenticationFilter 를 상속한다
+- POST /login 요청에 대해 인증 처리를 담당한다
+- 인증에 성공하게 되면 SecuritySigner 를 호출해서 JWT 토큰을 생성하고 클라이언트에게 응답한다
+- MAC 과 RSA 의 서명 및 인증에 공통으로 사용하는 필터
+
+### ✓ SecuritySigner
+- MAC 및 RSA 암호화 방식에 따라 토큰을 발행하는 추상 클래스
+
+## 3-2. MAC 검증 기능 구현
+
+### 3-2-1. JwtAuthorizationMacFilter 에 의한 검증
+<img src="/static/images/springBoot/image00000027.png" />
+
+**✓ OAuth2ResourceServer**
+```java
+@Bean //리소스 서버 설정 클래스로서 MAC 인증 및 인가 처리 설정을 한다
+SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  http.csrf().disable();
+  http.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+  http.authorizeRequests((requests) -> requests.antMatchers("/login","/").permitAll().anyRequest().authenticated());
+  http.userDetailsService(getUserDetailsService());
+  http.addFilterBefore(jwtAuthenticationFilter(macSecuritySigner, octetSequenceKey), UsernamePasswordAuthenticationFilter.class);
+  http.addFilterBefore(jwtAuthorizationMacFilter(octetSequenceKey), UsernamePasswordAuthenticationFilter.class);
+
+  return http.build();
+}
+```
+
+**✓ JwtAuthorizationMacFilter**
+- Bearer 토큰을 MAC 알고리즘에 의해 검증하며 검증 성공시 인증 및 인가를 처리하는 필터
+
+**✓ MacSecuritySinger**
+- SecuritySigner 을 상속받으며 MAC 기반 서명 및 토큰을 발행하는 클래스
+
+### 3-2-2. JwtDecoder 에 의한 검증
+**✓ JwtDecoderConfig**
+- SecretKey 기반 JwtDecoder 생성
+- 대칭키 방식으로 생성된 토큰을 검증하기 위해 JWK 를 상속한 OctetSequenceKey 로 SecretKey 기반 JwtDecoder 를 생성한다
+
+```java
+@Bean
+@ConditionalOnProperty(prefix = "spring.security.oauth2.resourceserver.jwt", name = "jws-algorithms", havingValue = "HS256", matchIfMissing = false)
+public JwtDecoder jwtDecoderBySecretKeyValue(OctetSequenceKey octetSequenceKey,OAuth2ResourceServerProperties properties) {
+  return NimbusJwtDecoder.withSecretKey(octetSequenceKey.toSecretKey())
+        .macAlgorithm(MacAlgorithm.from(properties.getJwt().getJwsAlgorithms().get(0)))
+        .build();
+}
+```
+
+**✓ application.yml**
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jws-algorithms: HS256
+```
+
+## 3-3. RSA 검증 기능 구현
+
+### 3-3-1. JwtAuthorizationRsaFilter 에 의한 검증
+**✓ OAuth2ResourceServer**
+```java
+@Bean //리소스 서버 설정 클래스로서 MAC 인증 및 인가 처리 설정을 한다
+SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  http.csrf().disable();
+  http.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+
+  http.authorizeRequests((requests) -> requests.antMatchers("/").permitAll().anyRequest().authenticated());
+  http.userDetailsService(getUserDetailsService());
+  http.addFilterBefore(jwtAuthenticationFilter(rsaSecuritySigner, rsaKey), UsernamePasswordAuthenticationFilter.class);
+  http.addFilterBefore(jwtAuthorizationRsaFilter(rsaKey), UsernamePasswordAuthenticationFilter.class);
+
+  return http.build();
+}
+```
+
+**✓ JwtAuthorizationRsaFilter**
+- Bearer 토큰을 RSA 알고리즘에 의해 검증하며 검증 성공시 인증 및 인가를 처리하는 필터
+
+**✓ RsaSecuritySinger**
+- SecuritySigner 을 상속받으며 RSA 기반 서명 및 토큰을 발행하는 클래스
+
+### 3-3-2. JwtDecoder 에 의한 검증
+**✓ JwtDecoderConfig**
+- PublicKey 기반 JwtDecoder 생성
+- 비대칭키 방식으로 생성된 토큰을 검증하기 위해 JWK 를 상속한 RSAKey 로 PublicKey 기반 JwtDecoder 를 생성한다
+
+```java
+@Bean
+@ConditionalOnProperty(prefix = "spring.security.oauth2.resourceserver.jwt", name = "jws-algorithms", havingValue = "RS512", matchIfMissing = false)
+public JwtDecoder jwtDecoderByPublicKeyValue(RSAKey rsaKey, OAuth2ResourceServerProperties properties) throws JOSEException {
+  return NimbusJwtDecoder.withPublicKey(rsaKey.toRSAPublicKey())
+        .signatureAlgorithm(SignatureAlgorithm.from(properties.getJwt().getJwsAlgorithms().get(0)))
+        .build();
+}
+```
+
+**✓ application.yml**
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jws-algorithms: RS512
+```
+
+### 3-3-3. KeyStore 에 의한 검증
+**✓ KeyStore 클래스**
+- Java 는 KeyStore 라는 인터페이스를 통해 암호화/복호화 및 전자 서명에 사용되는 Private Key, Public Key 와 Certificate 를 추상화하여 제공하고 있다
+- KeyStore 에는 SecretKey, Private Key, Public Key, Certificate 와 같은 보안 파일들이 저장되며 KeyStore 는 파일 시스템에 저장하고 암호로 보호할 수 있다
+- KeyStore 는 keytool 사용해서 생성할 수 있으며 기본 타입은 jks 이다
+
+**✓ keytool**
+- keytool 은 자바에서 제공하는 유틸리티로 KeyStore 기반으로 인증서와 키를 관리할 수 있으며 JDK 에 포함되어 있다.
+  - C:\Program Files\Java\jdk-11.0.11\bin\keytool.exe
+- Keystore 생성 후 PrivateKey, PublicKey, Certificate 생성
+  - Private key 생성 : keytool -genkeypair -alias apiKey -keyalg RSA -keypass "pass1234" -keystore apiKey.jks -storepass "pass1234"
+  - Certificate 생성 : keytool -export -alias apiKey -keystore apiKey.jks -rfc -file trustServer.cer
+  - Public key 생성 : keytool -import -alias trustServer -file trustServer.cer -keystore publicKey.jks
+
+**✓ 순서**
+1. **KeyStore 의 객체를 얻는다**
+   - keytool 을 통해 얻은 apiKey.jks 파일을 읽어오면 키와 인증서를 가져 올 수 있으며 여기에는 개인키와 인증서, 공개키 정보를 담고 있다
+     - KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType()) // 기본 타입은 .jks( java key store)
+     - keystore.load(new FileInputStream(“/certs/apiKey.jks)”, keystorepassword.toCharArray()); // 기존 키 저장소를 load 한다
+2. **개인 키를 얻는다**
+   - PrivateKey key = (PrivateKey) keystore.getKey(alias, "test1234".toCharArray());
+3. **인증서를 얻는다**
+   - Certificate certificate = keystore.getCertificate(alias);
+4. **인증서로부터 공개 키를 얻고 Base64 로 인코딩한 다음 문자열을 변환한다**
+   - PublicKey publicKey = certificate.getPublicKey();
+   - String publicStr = java.util.Base64.getMimeEncoder().encodeToString(publicKey.getEncoded());
+5. **인코딩된 공개 키 문자열을 txt 파일로 저장한다**
+   - OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(“/certs/publicKey.txt"), Charset.defaultCharset());
+   - writer.write(publicStr);
+   - writer.close();
+
+**✓ JwtDecoderConfig**
+```java
+@Bean
+@Conditional(KeyValueCondition.class)
+JwtDecoder jwtDecoderByPublicKeyValue() throws Exception {
+  RSAPublicKey publicKey = (RSAPublicKey) KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(getKeySpec(this.properties.readPublicKey())));
+  NimbusJwtDecoder jwtDecoder = 
+      NimbusJwtDecoder.withPublicKey(publicKey).signatureAlgorithm(SignatureAlgorithm.from(this.properties.getJwsAlgorithm())).build();
+  jwtDecoder.setJwtValidator(getValidators(JwtValidators::createDefault));
+
+  return jwtDecoder;
+}
+```
+
+**✓ OAuth2ResourceServer**
+- 리소스 서버 설정 클래스로서 KeyStore 에서 추출한 PublicKey 에 의해 RSA 인증 및 인가 처리 설정을 한다
+
+**✓ RsaPublicKeySecuritySigner**
+- SecuritySigner 을 상속받으며 RSA 암호화 방식의 서명 및 토큰 발행
+
+**✓ RsaKeyExtractor**
+- apiKey.jks 로 부터 PrivateKey 와 PublicKey 를 추출하고 파일에 저장하는 클래스
+
+### 3-3-4. JwkSetUri 에 의한 검증
+**✓ SecurityJwkSetUriResourceServerConfig**
+```java
+@Bean
+@ConditionalOnProperty(name = "spring.security.oauth2.resourceserver.jwt.jwk-set-uri")
+JwtDecoder jwtDecoderByJwkKeySetUri() {
+  NimbusJwtDecoder nimbusJwtDecoder = 
+  NimbusJwtDecoder.withJwkSetUri(this.properties.getJwkSetUri()).jwsAlgorithm(SignatureAlgorithm.from(this.properties.getJwsAlgorithm())).build();
+  String issuerUri = this.properties.getIssuerUri();
+  Supplier<OAuth2TokenValidator<Jwt>> defaultValidator = (issuerUri != null) ? () -> JwtValidators.createDefaultWithIssuer(issuerUri) : JwtValidators::createDefault;
+  nimbusJwtDecoder.setJwtValidator(getValidators(defaultValidator));
+
+  return nimbusJwtDecoder;
+}
+```
+
+**✓ OAuth2ResourceServer**
+- 리소스 서버 설정 클래스로서 인가서버 엔드포인트인 JwkSetUri 방식에 의한 RSA 인증 및 인가 처리 설정을 한다
+  <img src="/static/images/springBoot/image00000028.png" />
+
+# 4. Authentication / @AuthenticationPrincipal
+
+## ✓ Authentication
+- 리소스 서버에서 토큰 검증이 이루어지면 토큰으로 부터 정보를 추출해서 인증객체를 구성하게 된다
+- 스프링 시큐리티의 자원에 대한 접근은 인증객체의 인증 유무와 권한정보에 따라 결정되기 때문에 인증객체를 생성해야 한다
+- 인증 객체는 JwtAuthenticationToken 타입으로 생성되고 SecurityContext 에 저장한다
+
+## ✓ Jwt
+- JwtDecoder 는 검증이 성공하면 토큰의 클레임으로부터 정보를 추출해서 최종 Jwt 객체를 반환한다
+- Jwt 객체는 JwtAuthenticationToken 의 principal 속성에 저장된다
+
+## ✓ @AuthenticationPrincipal
+- JwtAuthenticationToken 의 principal 에 저장되어 있는 Jwt 객체를 바로 참조할 수 있다
+  <img src="/static/images/springBoot/image00000029.png" />
+
+# 5. BearerTokenAuthenticationFilter
+<img src="/static/images/springBoot/image00000030.png" />

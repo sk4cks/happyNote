@@ -1,0 +1,96 @@
+---
+title: '[스프링 부트 - 이해와 원리] @Configuration과 proxyBeanMethods'
+date: 2024-09-14
+tags: ['springboot']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## @Configuration의 작동 원리
+
+@Configuration이 붙은 클래스는 `CGLIB 라이브러리`를 이용해서 프록시 클래스로 확장을 해서 **@Bean이 붙은 메서드의 동작방식을 변경**한다.
+
+> CGLIB(Code Generator Library): 코드 생성 라이브러리로서 런타임에 동적으로 자바 클래스의 프록시를 생성해주는 기능을 제공한다. CGLIB는 타겟에 대한 정보를 직접적으로 제공 받아 바이트 코드를 조작하여 프록시를 생성한다.
+
+CGLIB 의 내부 동작 원리를 표현한 테스트 코드를 살펴보자
+
+```java
+@Test
+void proxyCommonMethod() {
+    MyConfigProxy myConfigProxy = new MyConfigProxy();
+
+    Bean1 bean1 = myConfigProxy.bean1();
+    Bean2 bean2 = myConfigProxy.bean2();
+
+    assertThat(bean1.common).isSameAs(bean2.common);
+}
+
+static class MyConfigProxy extends MyConfig {
+    private Common common;
+
+    @Override
+    Common common() {
+        if(this.common == null) this.common = super.common();
+        return this.common;
+    }
+}
+
+@Configuration
+static class MyConfig {
+    @Bean
+    Common common() {
+        return new Common();
+    }
+
+    @Bean
+    Bean1 bean1 () {
+        return new Bean1(common());
+    }
+
+    @Bean
+    Bean2 bean2() {
+        return new Bean2(common());
+    }
+}
+
+static class Bean1 {
+    private final Common common;
+
+    Bean1(Common common) {
+        this.common = common;
+    }
+}
+
+static class Bean2 {
+    private final Common common;
+
+    Bean2(Common common) {
+        this.common = common;
+    }
+}
+
+static class Common {
+}
+```
+
+`MyConfigProxy`가 바로 CGLIB가 기존 클래스를 확장하여 생성한 프록시 클래스를 간략하게 나타낸 것이다. 한 번 호출된 Common 오브젝트를 변수로 캐싱하여 가지고 있다가 다시 호출되면 기존에 생성된 Common오브젝트를 반환한다. 이 원리로 오브젝트의 싱글톤을 유지할 수 있는 것이다. 여기까지가 @Configuraiton의 동작 원리다.
+
+## proxyBeanMethods 옵션
+
+스프링 5.2에서 proxyBeanMethod 옵션이 추가가 되면서 스프링에 들어있는 Configuration 클래스들이 proxyBeanMethod옵션을 false로 바꿔서 적용하는 경우가 많이 늘어났다
+
+ex) SchedulingConfiguration
+![image](https://github.com/user-attachments/assets/e5f880b0-c43c-41b6-92bf-33175f04630f)
+해당 **옵션을 false로 주면 @Configuration 클래스의 프록시 클래스를 생성하지 않는다.**
+
+## 💡 언제 사용하면 좋을까?
+
+내가 만약 Bean 메서드를 통해서 Bean 오브젝트를 만들때 또 다른 Bean 메서드를 호출해서 의존 오브젝트를 가져오는 식으로 코드를 작성하지 않았다면 사실 굳이 매번 시간이 걸리고 비용이 드는 proxy를 만드는 방식으로 사용할 필요가 없다.
+
+스프링 공식문서에서도 @Bean 어노테이션이 붙은 메서드가 또 다른 Bean메서드를 호출하는 방식으로 사용하지 않고 이 자체로 이 Bean을 생성하는데 충분한 작업을 수행한다고 하면 proxyBeanMethod를 false로 설정하고 사용해도 괜찮다라고 이야기를 한다

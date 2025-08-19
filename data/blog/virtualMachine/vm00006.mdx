@@ -1,0 +1,74 @@
+---
+title: '🔨 vagrant(VM)에 rhel8 설치'
+date: 2025-06-10
+tags: ['vm', 'rhel']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. vagrant box 추가
+
+```powershell
+# vagrant 경로로 이동
+cd {vagrant 경로}
+
+# vagrant box 추가
+vagrant box add generic/rhel8
+
+# vagrant box 확인
+vagrant box list
+```
+
+# 2. 초기화
+
+```powershell
+# 초기화
+vagrant init generic/rhel8
+
+# 실행
+vagrant up
+
+# 접속
+vagrant ssh
+```
+
+# 3. Red Hat 계정 생성
+
+- [https://www.redhat.com/ko] 에서 계정을 생성한다.
+
+# 4. 구독등록
+
+```bash
+# 구독 등록
+sudo subscription-manager register
+# 위 명령어를 입력하고 Username과 Password를 입력한다
+
+# 등록된 시스템 정보 확인
+sudo subscription-manager identity
+```
+
+# 5. dnf-plugins-core 설치
+
+```bash
+# dnf download, config-manager 등 확장 기능이 필요한 경우에 설치
+sudo dnf install dnf-plugins-core
+```
+
+# 6. 구독취소
+
+```bash
+# 할당된 서브스크립션(사용권)을 해제하는 것
+sudo subscription-manager remove --all
+
+# 시스템 전체를 Red Hat에서 등록 해제하는 것
+sudo subscription-manager unregister
+
+# 서브스크립션 인증 정보 삭제 (등록 해제와 유사)
+sudo subscription-manager clean
+```

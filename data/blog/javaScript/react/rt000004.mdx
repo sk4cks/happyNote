@@ -1,0 +1,93 @@
+---
+title: 'React에서 store 변수 사용하기'
+date: 2024-08-13
+tags: ['javascript', 'react-js']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+### 1. Redux 설치
+
+```bash
+yarn add @reduxjs/toolkit react-redux
+```
+
+### 2. store.js 생성
+
+```javascript
+import { configureStore } from "@reduxjs/toolkit";
+
+export default configureStore({
+  reducer: {},
+});
+```
+
+### 3. main.jsx 수정
+
+```javascript
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./index.css";
+import { BrowserRouter } from "react-router-dom";
+import { Provider } from "react-redux"; //추가
+import store from "./store/store.js"; //추가
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  //<Provider store={store}> 추가
+  <Provider store={store}>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </Provider>
+);
+```
+
+### 4. state 생성
+
+```javascript
+store.js;
+
+// createSlice 임포트
+import { configureStore, createSlice } from "@reduxjs/toolkit";
+
+let user = createSlice({
+  name: "user",
+  initialState: "kim", //초기값
+  reducers: {
+    changeUser(state, action) {
+      //state 변경 함수
+      state = action.payload;
+    },
+  },
+});
+
+//state를 변경하는 함수 changeUser를 export 한다
+export let { changeUser } = user.actions;
+
+export default configureStore({
+  reducer: {
+    user: user.reducer, //user state를 외부에서 사용할수 있게 설정한다.
+  },
+});
+```
+
+### 5. state 사용하기
+
+```javascript
+CartView.jsx; //사용 컴포넌트
+
+import { useDispatch, useSelector } from "react-redux";
+
+let userName = useSelector((state) => state.user); //store에 있는 user값을 가져온다
+let dispatch = useDispatch(); // store에 있는 state변경 함수를 호출할때 감싸줘야함
+
+console.log(userName); //kim
+dispatch(changeUser("Lee")); //store에 있는 user값이 Lee로 변경
+```

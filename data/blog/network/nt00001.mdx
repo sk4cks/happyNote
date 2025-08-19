@@ -1,0 +1,108 @@
+---
+title: 'ipTIME 공유기 VPN 설정(L2TP)'
+date: 2024-10-04
+tags: ['network']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## 1. VPN Server로 사용할 공유기의 VPN 설정
+
+1. VPN Server로 사용할 공유기에 연결된 PC에서 인터넷 탐색기를 실행하고 주소 입력란에 공유기의 <br/>
+   내부IP주소(예. 192.168.0.1)를 입력하여 공유기 웹 설정화면에 접속하신 후 <br/>
+   [관리도구] -> [고급설정] -> [특수기능] -> [VPN 서버설정] 메뉴로 이동합니다.
+
+   L2TP 서버를 [실행]으로 체크하고 비밀키를 입력한 후 [적용] 버튼을 클릭합니다.
+   ![image](https://github.com/user-attachments/assets/260863bf-8f54-4233-91f3-63461d0da190)
+
+2. 하단의 [VPN 접속 계정], [VPN 접속 암호], [할당 될 IP 주소]를 입력하신 후 [추가] 버튼을 클릭합니다.
+   ([할당 될 IP 주소]의 경우 공유기에서 사용하고 있지 않은 IP로 지정해야 합니다.)
+   ![image](https://github.com/user-attachments/assets/49d1b7aa-ddc0-448d-8044-a926a503b2e8)
+
+   - vpn 등록 가능 계정수는 제품마다 차이가 있을 수 있습니다.
+
+3. [기본 설정] -> [시스템 요약 정보] 메뉴로 이동하여 [외부IP주소]를 확인합니다.
+   ![image](https://github.com/user-attachments/assets/33340be7-513e-41b2-9b66-30c375a561be)
+
+   위 예제의 경우 VPN Server 공유기의 외부IP가 100.0.0.2 이므로,<br/>
+   VPN Client 접속시 100.0.0.2를 통해 접속이 가능합니다.
+
+   - 외부 ip는 변동될 수 있기 때문에 ipTIME에서 제공하는 DDNS를 이용하면 편리합니다.
+
+4. DDNS 설정 방법
+
+   1. DDNS 설정
+      메뉴탐색기의 [고급 설정]의 [특수기능] 메뉴로 접속하여 아래 그림의 ① ~ ④ 순서로 DDNS설정을 진행합니다.
+
+      ① 고급설정-> 특수기능-> [DDNS 설정] 클릭<br/>
+      ② 호스트 이름: DDNS주소로 사용할 이름을 입력합니다.<br/>
+      ③ 사용자 ID: 실제 사용하고 있는 ‘유효한 이메일’을 입력합니다.<br/>
+      ④ [DDNS 등록] 클릭<br/>
+      ![image](https://github.com/user-attachments/assets/fc373da8-d286-442d-b55e-9b9c0db39831)
+
+   2. 정상 등록 확인
+      아래와 같이 접속 상태에 ‘정상등록’으로 표기되면 DDNS 등록이 정상적으로 완료된 것으로 DDNS서비스를 이용할 수 있습니다.
+      ![image](https://github.com/user-attachments/assets/cd7c2d89-2c88-4bb3-add6-8042954c2fe7)
+
+      [참고]
+
+      - DDNS는 최종 등록된 호스트 이름만 유효합니다.
+
+      - 공유기 1대 당 1개의 호스트 이름(서비스 계정)만 등록할 수 있습니다.
+      - 동일한 사용자 ID(이메일)로 DDNS를 등록하는 경우 최대 18대의 공유기까지 다른 호스트이름을 부여하여 사용할 수 있습니다.
+      - 동일한 DDNS 정보(호스트 이름과 사용자ID)를 2대 이상의 공유기에 중복 입력할 경우, IP정보가 양쪽에서 반복적으로 갱신되어 정상적인
+        DDNS이용이 불가능합니다. 공유기마다 각기 다른 DDNS정보(호스트 이름)을 입력합니다.
+      - DDNS 정보가 3개월 이상 당사 서버에 갱신 요청이 없을 경우에는 자동으로 도메인(호스트 이름)과 서비스 계정이 삭제됩니다.
+      - ipTIME 공유기 도메인(iptime.org 및 ipdisk.co.kr)의 삭제 버튼을 누르면 즉시 서버에서 도메인이 삭제됩니다. 짧은 기간 내에
+        다수의 등록, 갱신, 삭제가 요청되면 '등록이 차단된 호스트 이름'에 등록될 수 있습니다.
+
+   3. DDNS 설정시 오류 메세지 원인 및 대처방법
+
+      [https://iptime.com/iptime/?page_id=67&pageid=1&mod=document&uid=24523] 링크를 참조하여 오류를 해결할 수 있습니다.
+
+## 2. VPN Client에서 VPN Server로 접속
+
+위 과정에서 설정한 VPN Server로 Windows를 사용하는 VPN Client가 접속하는 과정입니다.<br/>
+예제는 Windows 10에서 기본 제공하는 VPN Client를 이용한 접속방법이므로,<br/>
+다른 OS의 접근방법에 대해서는 각 기기별 제조사의 도움을 받아 보시기 바랍니다.<br/>
+
+<b>Windows 10 VPN 클라이언트 설정 방법</b>
+
+1.  [윈도우] 버튼을 클릭하고 [설정]을 클릭합니다.
+
+    ![image](https://github.com/user-attachments/assets/5b9cbc0e-e2d4-4551-b374-57818198825c)
+
+2.  아래 화면이 나오면 [네트워크 및 인터넷]을 선택합니다.
+
+    ![image](https://github.com/user-attachments/assets/cc790858-082e-45e9-ab62-ccfb24033a0c)
+
+3.  [VPN]을 클릭하고 [VPN 연결 추가]를 선택합니다.
+
+    ![image](https://github.com/user-attachments/assets/62de7990-c99c-4ba9-aad6-0d2c9b61c448)
+
+4.  연결하려는 VPN Server의 [서버 이름 또는 주소]와 [연결 이름]을 입력합니다.<br/>
+    (본 예제에서는 VPN Server 공유기의 외부IP인 100.0.0.2와 ipTIME을 입력하였습니다.)<br/>
+    ([서버 이름 또는 주소]에는 외부ip 대신 등록된 ddns 주소를 입력할 수 있으며<br/>
+    [연결 이름]은 임의로 입력할 수 있습니다.)
+
+    VPN 종류는 [L2TP/IPsec 및 미리 공유한 키]로 설정하시고<br/>
+    VPN Server에 등록된 [사용자 이름]과 [암호], [미리 공유한 키]를 입력하고 [저장]을 클릭합니다.<br/>
+    (예제에서는 사용자 이름 : test_1, 암호 : 1234 를 사용하였습니다.)<br/>
+    ([미리 공유한 키]는 VPN 서버에서 설정했던 비밀키와 같습니다. 서버에서 설정했던 12345678 을 입력합니다.)
+
+    ![image](https://github.com/user-attachments/assets/22f3dde8-e9e2-4945-99b7-c8756f7655d3)
+
+5.  VPN 연결을 선택 후 [이 연결 시작]을 클릭합니다.
+    ![image](https://github.com/user-attachments/assets/4180b6a1-6856-4d6a-be6a-4fb9aaf6e477)
+
+6.  미리 만들어놓은 ipTIME 의 [연결]을 선택합니다.
+    ![image](https://github.com/user-attachments/assets/3d95d671-1601-44f5-8975-d6c536cbe53e)
+
+7.  정상적으로 연결되었다면 가상 사설망 연결이 아래와 같이 활성화 됩니다.
+    ![image](https://github.com/user-attachments/assets/828a763b-d40e-48bc-b623-5830882d79b6)

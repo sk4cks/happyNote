@@ -1,0 +1,119 @@
+---
+title: '🔅[스프링 시큐리티 OAuth2] oauth2ResourceServer().opaque()'
+date: 2025-08-08
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. Opaque 개념 및 API 설정
+
+## ✓ 개념
+
+- Opaque 토큰은 인가 서버에서 호스트하는 OAuth 2.0 Introspection 엔드포인트로 검증한다.
+- Bearer 토큰이 리소스 서버에서 처리하는 자체 검증이라면 Opaque 토큰은 인가서버에서 처리하는 원격 검증이라고 볼 수 있다
+
+## ✓ 환경 설정
+
+- 두 가지 설정만 하면 인가서버와의 Instrospection 검증이 가능하다.
+
+    ①  필요한 의존성을 추가한다
+    ```groovy
+    runtimeOnly 'com.nimbusds:oauth2-oidc-sdk:9.35'
+    ```
+
+    ② introspection 엔드포인트 상세 정보를 설정한다
+    ```yaml
+    spring:
+        security:
+            oauth2:
+                resourceserver:
+                    opaquetoken:
+                        introspection-uri: http://localhost:8080/realms/oauth2/protocol/openid-connect/introspect
+                        client-id: oauth2-client-app
+                        client-secret: CQueEWXZYmv7IIZVxbvh2uwxptXVaRcX
+    ```
+
+  - http://localhost:8080/realms/oauth2/protocol/openid-connect/introspect 는 인가 서버가 호스트하는 introspection 엔드포인트이다
+  - client-id 와 client-secret 은 엔드포인트 요청에 사용할 클라이언트 자격증명이다.
+
+## ✓ 설정 클래스
+
+```java
+@Configuration(proxyBeanMethods = false)
+static class OAuth2ResourceServerConfig {
+    @Bean
+    SecurityFilterChain jwtSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeRequests((requests) -> requests.anyRequest().authenticated());
+        http.oauth2ResourceServer(OAuth2ResourceServerConfigurer::opaque);
+        return http.build();
+    }
+}
+```
+
+## ✓ OpaqueTokenConfigurer / 초기화 과정
+
+<img src="/static/images/springBoot/image00000035.png" />
+<br/><br/>
+
+# 2. 토큰 검사 및 프로세스 이해
+
+<img src="/static/images/springBoot/image00000036.png" />
+
+## ✓ OpaqueTokenIntrospector
+
+- 문자열 토큰을 RestTemplate 을 사용하여 인가서버 엔드포인트로 요청한다
+- 토큰이 검증되면 최종 OAuth2AuthenticatedPrincipal 타입의 객체로 디코딩하여 반환한다.
+- OAuth2AuthenticatedPrincipal 은 BearerTokenAuthentication 의 principal 속성에 저장된다
+<br/>
+
+<img src="/static/images/springBoot/image00000037.png" />
+
+## ✓ CustomOpaqueTokenIntrospector
+
+- OpaqueTokenIntrospector 인터페이스를 구현하여 커스텀한 구현체를 만들어 재정의 할 수 있다
+- 검증 후 리턴 타입이 OAuth2AuthenticatedPrincipal 이기 때문에 인가서버에서 받아온 클레임 정보를 활용해서 여러가지 커스텀한 작업이 가능하다
+
+```java
+http 
+    .oauth2ResourceServer(oauth2 -> oauth2
+        .opaqueToken(opaqueToken -> opaqueToken
+            .introspector(customOpaqueTokenIntrospector())
+        )
+    );
+```
+
+```java
+@Bean
+public OpaqueTokenIntrospector customOpaqueTokenIntrospector() {
+    return new CustomOpaqueTokenIntrospector();
+}
+```
+
+```java
+public class CustomOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
+    private OpaqueTokenIntrospector delegate = 
+        new NimbusOpaqueTokenIntrospector(" http://localhost:8080/realms/oauth2/protocol/openid-connect/introspect ", "client", "secret");
+
+    public OAuth2AuthenticatedPrincipal introspect(String token) {
+        OAuth2AuthenticatedPrincipal principal = this.delegate.introspect(token); // 인가서버로 부터 받은 클레임 정보를 저장하고 있다
+        
+        return new DefaultOAuth2AuthenticatedPrincipal(
+            principal.getName(), principal.getAttributes(), extractAuthorities(principal)); // 커스텀하게 권한 매핑 한다
+    }
+
+    private Collection<GrantedAuthority> extractAuthorities(OAuth2AuthenticatedPrincipal principal) {
+        List<String> scopes = principal.getAttribute(OAuth2IntrospectionClaimNames.SCOPE);
+
+        return scopes.stream()
+            .map(SimpleGrantedAuthority::new)
+            .collect(Collectors.toList());
+    }
+}
+```

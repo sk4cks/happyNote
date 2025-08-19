@@ -1,0 +1,103 @@
+---
+title: 'Jsp&SpringBoot 프로젝트 War로 배포하기'
+date: 2024-08-29
+tags: ['java', 'springboot']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## 1. build.gradle 수정
+
+```gradle
+//플러그인 설정
+plugins {
+	...
+	id 'war'
+}
+
+dependencies {
+	// jsp - 외부 WAS 배포위해 compileOnly
+	compileOnly 'org.springframework.boot:spring-boot-starter-tomcat'
+	compileOnly 'org.apache.tomcat.embed:tomcat-embed-jasper'
+	compileOnly 'javax.servlet:jstl:1.2'
+	...
+}
+
+// 외장 WAR 설정
+bootWar {
+	archiveBaseName = 'ROOT'
+	archiveVersion = '1.0.1'
+	archiveClassifier = ''
+	//archiveFileName = 'ROOT.war' // 설정안하면 {baseName}-{version}-{classifier:기본값plan}.war
+}
+```
+
+## 2. SpringBootServletInitializer 상속
+
+🔑 외장 톰캣으로 서비스를 제공하기 위해서는 main 클래스에서 SpringBootServletInitializer상속 받고, configure 메서드 오버 라이딩이 추가적으로 필요하다.
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
+
+@SpringBootApplication
+public class TestApplication extends SpringBootServletInitializer {
+
+    @Override
+    protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
+        return application.sources(TestApplication.class);
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(TestApplication.class, args);
+    }
+}
+```
+
+## 3. bootWar(gradle task) 실행
+
+🔑 gradle task에서 bootWar를 더블클릭 하면 build/libs 폴더 하위에 war파일이 생성된다.
+
+## 4. WAR 배포
+
+- (defualt)설치한 tomcat 폴더에 webapps 하위에 war파일을 넣고 ROOT.war로 파일명 변경 후 기존에 있던 ROOT 폴더는 삭제한다.
+- (other) 다른이름으로 war를 사용할 경우
+
+  - 똑같이 webapps 하위에 war파일을 넣는다.
+  - conf/server.xml 수정
+
+    ```java
+    //ex) root context를 example로 등록 (example.war)
+    <Host name="localhost"  appBase="webapps" unpackWARs="true" autoDeploy="true">
+        <Context path="/" docBase="example"  reloadable="false" > </Context>
+    </Host>
+
+    //<Context path="[경로]" docBase="[war파일의 이름]" reloadable="false"></Context>
+    //tomcat서버에서 하나의 가상경로를 추가하는 방법으로 path="/"로 설정하면 ROOT폴더 대신
+    // 등록한 폴더가 실행된다.
+    ```
+
+## 5. tomcat 실행
+
+## [TroubleShooting] JAVA_HOME이랑 프로젝트 JDK 버전이 다름
+
+### 1. jdk 경로 변경
+
+- tomcat폴더경로/bin/catalina.bat 수정
+
+```java
+set "JAVA_HOME=C:\Program Files\Java\jdk-11"
+set "JRE_HOME=C:\Program Files\Java\jdk-11"
+
+//프로젝트에 맞는 jdk경로를 추가
+```
+
+### 2. tomcat 재실행

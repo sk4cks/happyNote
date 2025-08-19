@@ -1,0 +1,208 @@
+---
+title: '🤔 Wrapper Class 사용 이유'
+date: 2025-01-01
+tags: ['java']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 자바에서의 자료형이란?
+
+> 자료형이란 데이터 타입(type)을 의미하며, 프로그래밍 언어에서는 <b>여러 종류의 데이터를 식별하는 분류</b>를 의미한다.
+> 자바에서 제공하는 자료형은 크게 2가지로 분류할 수 있다.
+
+## 1. 기본 자료형
+
+> <span style={{color: 'red'}}><b><span className="underline">실제 값</span> 만을 저장하는 공간으로 스택 메모리 영역에 저장됩니다.</b></span><br/>
+> 기본값이 있기 때문에 Null이 존재 하지 않고 만약 기본형 타입에 Null을 넣고 싶다면 래퍼 클래스를 활용합니다.
+
+<div style={{overflow: 'auto', width: '100%'}}>
+    <table style={{width: '100%', border: 'darkgray'}} border="1" data-ke-style="style3" data-ke-align="alignLeft">
+        <tbody>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '11.9767%', height: '19px'}}>&nbsp;</td>
+                <td style={{width: '21.0466%', height: '19px'}}><span style={{color: '#006dd7'}}>타입</span></td>
+                <td style={{width: '26.9767%', height: '19px'}}><span style={{color: '#006dd7'}}>할당되는 메모리 크기</span></td>
+                <td style={{width: '16.3953%', height: '19px'}}><span style={{color: '#006dd7'}}>기본값</span></td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '11.9767%', height: '19px'}}><span style={{color: '#006dd7'}}>논리형</span></td>
+                <td style={{width: '21.0466%', height: '19px'}}>boolean</td>
+                <td style={{width: '26.9767%', height: '19px'}}>1 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>false</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '11.9767%', height: '76px'}} rowSpan="4"><span style={{color: '#006dd7'}}>정수형</span></td>
+                <td style={{width: '21.0466%', height: '19px'}}>byte</td>
+                <td style={{width: '26.9767%', height: '19px'}}>1 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.0466%', height: '19px', padding: '0.5em'}}>short</td>
+                <td style={{width: '26.9767%', height: '19px'}}>2 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.0466%', height: '19px', padding: '0.5em'}}>int</td>
+                <td style={{width: '26.9767%', height: '19px'}}>4 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.0466%', height: '19px', padding: '0.5em'}}>long</td>
+                <td style={{width: '26.9767%', height: '19px'}}>8 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0L</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '11.9767%', height: '38px'}} rowSpan="2"><span style={{color: '#006dd7'}}>실수형</span></td>
+                <td style={{width: '21.0466%', height: '19px'}}>float</td>
+                <td style={{width: '26.9767%', height: '19px'}}>4 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0.0F</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.0466%', height: '19px', padding: '0.5em'}}>double</td>
+                <td style={{width: '26.9767%', height: '19px'}}>8 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>0.0</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '11.9767%', height: '19px'}}><span style={{color: '#006dd7'}}>문자형</span></td>
+                <td style={{width: '21.0466%', height: '19px'}}>char</td>
+                <td style={{width: '26.9767%', height: '19px'}}>2 byte</td>
+                <td style={{width: '16.3953%', height: '19px'}}>'\u0000'</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+## 2. 참조형 자료형
+
+> <span style={{color:'red'}}><b>스택에 저장되어 있는 <span className="underline">실제 값의 주소</span>를 저장하는 곳으로 힙 메모리 영역에 저장됩니다.</b></span><br/>
+
+<div style={{overflow: 'auto', width: '100%'}}>
+    <table style={{width: '100%', border: 'darkgray'}} border="1" data-ke-align="alignLeft">
+        <tbody>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.5116%', height: '19px'}}>&nbsp;</td>
+                <td style={{width: '28.4884%', height: '19px'}}>예시</td>
+                <td style={{width: '19.4186%', height: '19px'}}>기본값</td>
+                <td style={{width: '30.5814%', height: '19px'}}>할당되는 메모리 크기</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.5116%', height: '19px'}}>배열(Array)</td>
+                <td style={{width: '28.4884%', height: '19px'}} rowSpan="4">new 를 사용해 생성된 객체</td>
+                <td style={{width: '19.4186%', height: '76px'}} rowSpan="4"><span style={{backgroundColor: '#ffffff'}}>Null</span></td>
+                <td style={{width: '30.5814%', height: '76px'}} rowSpan="4">4 byte (객체의 주소값 != 실제 값의 주소값이 아닌 객체 자체에 대한 주소값)</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.5116%', height: '19px'}}>열거(Enum)</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.5116%', height: '19px'}}>클래스(Class)</td>
+            </tr>
+            <tr style={{height: '19px'}}>
+                <td style={{width: '21.5116%', height: '19px'}}>인터페이스(Interface)</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<br/>
+
+# wrapper 클래스란?
+
+> <b>기본 자료형을 참조형 자료형처럼 사용하기 위한 클래스</b>이다.<br/>
+> 이름에서도 알 수 있듯, wrapper 클래스는 감싸는 클래스이다.<br/>
+> 그럼 <b>무엇을 감싸는가?</b> 에 대한 답은 <b>기본 자료형이다.</b><br/>
+> 즉, <b>기본 자료형의 값을 감싸 객체형태로 만든 것이 바로 wrapper 클래스</b>이다.<br/>
+> wrapper 클래스의 경우 string 과 같이 불변성을 갖고 있다. 따라서 wrapper 클래스 안에 객체의 값은 변경 불가능하다.
+
+<table style={{width: '42.5581%', border: 'darkgray'}} border="1" data-ke-style="style3" data-ke-align="alignCenter">
+    <tbody>
+        <tr>
+            <td style={{width: '50%'}}><span style={{color: '#006dd7'}}>기본 자료형</span></td>
+            <td style={{width: '50%'}}><span style={{color: '#006dd7'}}>Wrapper Class</span></td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>int</td>
+            <td style={{width: '50%', height: '19px'}}>Integer</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>byte</td>
+            <td style={{width: '50%', height: '19px'}}>Byte</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>char</td>
+            <td style={{width: '50%', height: '19px'}}>Charcter</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>double</td>
+            <td style={{width: '50%', height: '19px'}}>Double</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>float</td>
+            <td style={{width: '50%', height: '19px'}}>Float</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>long</td>
+            <td style={{width: '50%', height: '19px'}}>Long</td>
+        </tr>
+        <tr style={{height: '19px'}}>
+            <td style={{width: '50%', height: '19px'}}>short</td>
+            <td style={{width: '50%', height: '19px'}}>Short</td>
+        </tr>
+    </tbody>
+</table>
+
+## wrapper 클래스 사용하는 이유
+
+> wrapper 클래스를 사용하는 이유는 참조형 자료형을 사용하는 이유와 같다.<br/>
+> 기본 자료형의 값을 단순히 값으로만 사용하지 않고 그 값에 대한 메서드를 사용 혹은 null값을 이용하기 위해 사용된다.<br/>
+> 하지만 우리가 wrapper 클래스를 흔히 사용하는 이유는 밑의 두가지 이유일 것이다.
+
+### 1. Generics 타입에 기본 자료형은 사용할 수 없다.
+
+```java
+// List<int> list = new ArrayList<>();  // Error! int형과 같은 기본형은 Generics 타입에 사용불가
+List<Integer> list = new ArrayList<>();
+
+// Set<char> set = new HashSet<>();  // Error! char형 Generics타입에 사용불가
+Set<Character> set = new HashSet<>();
+
+// Map<String, int> map = new HashMap<>(); // Error! int형 사용불가
+Map<String, Integer> map = new HashMap<>();
+```
+
+### 2. 형변환
+
+wrapper 클래스를 사용하면 쉽게 형변환이 가능하다.
+
+```java
+Integer i = 12;
+String str;
+str = i.toString(); // 12라는 숫자를 문자열 "12"로 반환
+int primaryInt = Integer.parseInt(str); // Integer클래스 안에 있는 문자열 변환 함수를 사용해 문자열을 정수로 바꾸는 모습
+```
+
+## 박싱(Boxing)과 언박싱(UnBoxing)
+
+- **박싱(Boxing)** : 기본형 데이터 타입(primitive type) ➡️ 래퍼 클래스(wrapper class)의 인스턴스로 변환
+- **언박싱(Un-Boxing)** : 래퍼 클래스(wrapper class) ➡️ 기본형 타입(primitive type)으로 변환
+- **오토박싱(Auto Boxing)** : 자바 컴파일러가 primitive ➡️ wrapper class 로 자동 변환
+- **오토언박싱(Auto Un-Boxing)** : 자바 컴파일러가 wrapper class ➡️ primitve 로 자동 변환
+
+  - 오토 박싱, 오토 언박싱 ➡️ Java5부터
+
+    ```java
+    List<Integer> list = new ArrayList<>();
+    list.add(new Integer(100)); // 객체 생성해서 넣는다.
+    list.add(100); // 오토박싱 (int -> Integer)
+
+    int a = 10;
+    Integer b = a; // 오토 박싱 (int -> Integer)
+    int c = b;  // 오토 언박싱 (Integer -> int)
+    ```

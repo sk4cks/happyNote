@@ -1,0 +1,105 @@
+---
+title: '[스프링 부트 - 이해와 원리] @Conditional 과 Condition'
+date: 2024-09-14
+tags: ['springboot']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## @Conditional이란?
+
+Conditon 말 그대로 직역하면 **"조건"** 입니다. Bean을 생성할때 어떤 조건에 맞을때만 Bean으로 등록하고 그렇지 않으면 등록하지 않는 역할을 해줍니다.
+![image](https://github.com/user-attachments/assets/51f842bd-92f1-4320-a113-5d47b00ca723)
+@Conditional은 Class 타입의 value를 가질 수 있습니다. <br/>
+즉, Condition 인터페이스를 구현한 클래스가 들어올 수 있다는 의미가 됩니다.
+
+## @Conditional Test 해보기
+
+### 1. Bean으로 사용될 클래스 작성
+
+```java
+@Configuration
+@BooleanConditional(true)
+static class Config1 {
+    @Bean
+    MyBean myBean() {
+        return new MyBean();
+    }
+}
+
+@Configuration
+@BooleanConditional(false)
+static class Config2 {
+    @Bean
+    MyBean myBean() {
+        return new MyBean();
+    }
+}
+
+static class MyBean {}
+```
+
+### 2. @Conditional 대신 사용할 커스텀 애너테이션 작성
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Conditional(BooleanCondition.class)
+@interface BooleanConditional{
+    boolean value();
+}
+```
+
+### 3. Condition 인터페이스를 구현한 클래스 작성
+
+```java
+static class BooleanCondition implements Condition {
+    @Override
+    public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+        Map<String, Object> annotationAttributes = metadata.getAnnotationAttributes(BooleanConditional.class.getName());
+        boolean value = (boolean) annotationAttributes.get("value");
+        return value;
+    }
+}
+
+//1. @BooleanConditional에 정의된 속성을 가져온다.
+//2. value라는 이름의 속성값을 가져와서 리턴한다.
+```
+
+### 4. 테스트 해보기
+
+```java
+@Test
+void conditional() {
+    //true
+    ApplicationContextRunner contextRunner = new ApplicationContextRunner();
+    contextRunner.withUserConfiguration(Config1.class)
+            .run(context -> {
+                assertThat(context).hasSingleBean(MyBean.class);
+                assertThat(context).hasSingleBean(Config1.class);
+            });
+    //false
+    new ApplicationContextRunner().withUserConfiguration(Config2.class)
+            .run(context -> {
+                assertThat(context).doesNotHaveBean(MyBean.class);
+                assertThat(context).doesNotHaveBean(Config2.class);
+            });
+}
+```
+
+> AnnotationConfigApplicationContext대신 ApplicationContextRunner를 테스트에서 사용하는 이유는, @Conditional 테스트는 Bean이 등록되지 않아, Bean이 없을 경우에는 getBean 메서드를 사용하면 BeanException 예외가 발생하여 테스트가 복잡해질 수 있습니다.
+
+Config1.class에서는 @BooleanConditional(true)로 설정을 했기 때문에 hasSingleBean 메서드로 Bean이 존재하는지에 대한 테스트코드를 작성하였고,<br/>
+Config2.class에서는 @BooleanConditional(false)로 설정을 했기 때문에 doesNotHaveBean 메서드로 Bean이 존재하지 않는것을 테스트코드로 작성하였습니다.
+
+### 5. 결과
+
+![image](https://github.com/user-attachments/assets/4e9f8e9e-4ae0-423b-966f-02f7c88f8e99)
+
+테스트가 정상적으로 통과하는 것을 확인할 수 있습니다.

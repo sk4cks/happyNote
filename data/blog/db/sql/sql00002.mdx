@@ -1,0 +1,127 @@
+---
+title: '🔄️ [MSSQL] 재귀쿼리'
+date: 2025-01-18
+tags: ['sql']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. 정방향 재귀쿼리 (부모 -> 자식)
+
+```sql
+WITH ORIGIN_TREE AS (
+    -- 초기 검색결과 노드부터 시작
+    SELECT
+        A.SEQ as "treeId"
+        , IIF(A.PARENT_SEQ = 0, NULL, A.PARENT_SEQ) as "treeParentId"
+        , A.LEVEL as "treeLevel"
+        , A.SORT as "treeOrder"
+    FROM A_TABLE AS A
+    WHERE
+        A.DEL_YN = 'N'
+    -- 검색결과 노드부터 하위 노드로 재귀하며 트리 구성 (정방향)
+    UNION ALL
+    SELECT
+        CHILD_NODE.SEQ as "treeId"
+        , IIF(CHILD_NODE.PARENT_SEQ = 0, NULL, CHILD_NODE.PARENT_SEQ) as "treeParentId"
+        , CHILD_NODE.LEVEL as "treeLevel"
+        , CHILD_NODE.SORT as "treeOrder"
+    FROM A_TABLE AS CHILD_NODE
+    INNER JOIN ORIGIN_TREE
+    ON ( ORIGIN_TREE.treeId = CHILD_NODE.PARENT_SEQ )
+    WHERE CHILD_NODE.DEL_YN = 'N'
+)
+--자식들중 같은 부모를 가진경우 중복이 되기때문에 중복 제거
+, DISTINCT_TREE as (
+    SELECT * FROM (
+        SELECT ORIGIN_TREE.*
+            , ROW_NUMBER() OVER (PARTITION BY ORIGIN_TREE.treeId ORDER BY ORIGIN_TREE.treeLevel ASC, ORIGIN_TREE.treeOrder ASC, ORIGIN_TREE.treeId ASC) as "rnum"
+        FROM ORIGIN_TREE ) AS TEMP
+    WHERE TEMP.rnum = 1
+)
+, RESULT_TREE as (
+    SELECT
+        CONVERT(NVARCHAR(MAX), DISTINCT_TREE.treeId) as "treeId"
+        , DISTINCT_TREE.treeParentId as "treeParentId"
+        , DISTINCT_TREE.treeLevel as "treeLevel"
+        , DISTINCT_TREE.treeOrder as "treeOrder"
+
+        -- A_TABLE 정보
+        , A.SEQ as "seq"
+        , A.NAME as "name"
+        , A.PHONE as "phone"
+        , A.AGE as "age"
+    FROM DISTINCT_TREE
+    INNER JOIN A_TABLE as A
+    ON A.SEQ = DISTINCT_TREE.treeId
+)
+
+SELECT * FROM RESULT_TREE
+ORDER BY
+    RESULT_TREE.treeLevel ASC
+    ,RESULT_TREE.treeOrder ASC
+;
+```
+
+# 2. 역방향 재귀쿼리 (자식 -> 부모)
+
+```sql
+WITH ORIGIN_TREE AS (
+    SELECT
+        A.SEQ as "treeId"
+        , IIF(A.PARENT_SEQ = 0, NULL, A.PARENT_SEQ) as "treeParentId"
+        , A.LEVEL as "treeLevel"
+        , A.SORT as "treeOrder"
+    FROM A_TABLE AS A
+    WHERE
+        A.DEL_YN = 'N'
+    -- 검색결과 노드부터 상위 노드로 재귀하며 트리 구성 (역순)
+    UNION ALL
+    SELECT
+        PARENT_NODE.SEQ as "treeId"
+        , IIF(PARENT_NODE.PARENT_SEQ = 0, NULL, PARENT_NODE.PARENT_SEQ) as "treeParentId"
+        , PARENT_NODE.LEVEL as "treeLevel"
+        , PARENT_NODE.SORT as "treeOrder"
+    FROM A_TABLE AS PARENT_NODE
+    INNER JOIN ORIGIN_TREE
+    ON ( ORIGIN_TREE.treeParentId = PARENT_NODE.SEQ )
+    WHERE
+        PARENT_NODE.DEL_YN = 'N'
+)
+--자식들중 같은 부모를 가진경우 중복이 되기때문에 중복 제거
+,DISTINCT_TREE as (
+    SELECT * FROM (
+        SELECT ORIGIN_TREE.*
+            , ROW_NUMBER() OVER (PARTITION BY ORIGIN_TREE.treeId ORDER BY ORIGIN_TREE.treeLevel ASC, ORIGIN_TREE.treeOrder ASC, ORIGIN_TREE.treeId ASC) as "rnum"
+        FROM ORIGIN_TREE ) AS TEMP
+    WHERE TEMP.rnum = 1
+)
+,RESULT_TREE as (
+    SELECT
+        CONVERT(NVARCHAR(MAX), DISTINCT_TREE.treeId) as "treeId"
+        , DISTINCT_TREE.treeParentId as "treeParentId"
+        , DISTINCT_TREE.treeLevel as "treeLevel"
+        , DISTINCT_TREE.treeOrder as "treeOrder"
+
+        -- A_TABLE 정보
+        , A.SEQ as "seq"
+        , A.NAME as "name"
+        , A.PHONE as "phone"
+        , A.AGE as "age"
+    FROM DISTINCT_TREE
+    INNER JOIN A_TABLE as A
+    ON A.SEQ = DISTINCT_TREE.treeId
+)
+
+SELECT * FROM RESULT_TREE
+ORDER BY
+    RESULT_TREE.treeLevel ASC
+    ,RESULT_TREE.treeOrder ASC
+;
+```

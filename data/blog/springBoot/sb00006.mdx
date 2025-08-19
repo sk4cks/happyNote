@@ -1,0 +1,67 @@
+---
+title: '📗[스프링 부트 - 이해와 원리] 스프링 부트 시작하기'
+date: 2024-08-31
+tags: ['springboot']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## 스프링 부트 소개
+
+스프링부트(Spring Boot)는 스프링을 기반으로 실무 환경에 사용가능한 수준의 독립실행형 애플리케이션을 복잡한 고민 없이 빠르게 작성할 수 있게 도와주는 여러가지 도구의 모음이다.
+
+> 💡 스프링 ≠ 스프링 부트!!
+
+## 스프링 부트의 핵심 목표
+
+- 매우 빠르고 광범위한 영역의 스프링 개발 경험을 제공
+- 강한 주장을 가지고 즉시 적용 가능한 기술 조합을 제공하면서, 필요에 따라 원하는 방식으로 손쉽게 변형 가능
+- 프로젝트에서 필요로 하는 다양한 비기능적인 기술(내장형 서버, 보안, 메트릭, 상태 체크, 외부 설정 방식 등) 제공
+- 코드 생성이나 xml 설정을 필요로 하지 않음
+
+## 스프링 부트의 역사
+
+2012년 스프링 프레임워크 프로젝트에 이슈로 등록된 “Containerless 웹 개발 아키텍처의 지원”요청에서 논의와 개발 시작
+
+[https://github.com/spring-projects/spring-framework/issues/14521]
+
+- 2013년 0.5.0.M1 공개
+  - [Spring Boot – Simplifying Spring for Everyone](https://spring.io/blog/2013/08/06/spring-boot-simplifying-spring-for-everyone)
+- 2014년 1.0 GA 공개
+  - [Spring Boot 1.0 GA Released](https://spring.io/blog/2014/04/01/spring-boot-1-0-ga-released)
+- 2018년 2.0 GA 공개
+  - [Spring Boot 2.0 goes GA](https://spring.io/blog/2018/03/01/spring-boot-2-0-goes-ga)
+- 2022년 2.7.5 공개
+  - [Spring Boot 2.7.5 available now](https://spring.io/blog/2022/10/20/spring-boot-2-7-5-available-now)
+
+## Containerless
+
+![image](https://github.com/user-attachments/assets/b335de8e-1f87-4a70-890c-4ea99e9da498)
+
+> 기본적으로 JAVA의 표준 웹 기술을 사용하려면 Servlet Container가 존재해야함.<br/>
+> Containerless란 실제로는 Servlet Container가 동작하지만 이러한 설정을 SpringBoot가 다 알아서 해줌
+> 또한 원하는 방식으로 Servlet Container를 커스터마이징 할 수 있음
+
+## 스프링 프레임워크의 설계 철학
+
+- 극단적인 유연함 추구
+- 다양한 관점을 수용
+- Not opinionated
+- 수많은 선택지를 다 포용
+- 하지만……
+
+## 스프링 부트의 설계 철학
+
+- Opinionated - 자기 주장이 강한, 자기 의견을 고집하는, 독선적인
+- 일단 정해주는 대로 빠르게 개발하고 고민은 나중에
+- 스프링을 잘 활용하는 뛰어난 방법을 제공
+- 유연한 확장
+  - 스프링 부트에 내장된 디폴트 구성을 커스터마이징 하는 매우 자연스럽고 유연한 방법을 제공
+  - 스프링 부트가 스프링을 사용하는 방식을 이해한다면 언제라도 스프링 부트를 제거하고 원하는 방식으로 재구성 가능
+  - 스프링 부트처럼 기술과 구성을 간편하게 제공하는 나만의 모듈 작성

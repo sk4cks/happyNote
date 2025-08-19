@@ -1,0 +1,198 @@
+---
+title: '[Window]Chocolatey로 docker 설치(+Ubuntu 설치)'
+date: 2024-09-20
+tags: ['window', 'chocolatey', 'docker', 'ubuntu']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+## 도커 설치 (Windows10)
+
+> 도커 종류 2개가 있다.<br/>
+> Docker Toolbox 와 Docker-for-windows(+hyper-v) <br/>
+> Docker-for-windows는 윈도우10 64bit를 지원하기때문에 <br/>
+> 하위버전은 Docker Toolbox를 써야한다.
+
+## 1. chocolatey 설치
+
+chocolatey설치가 안되있으면 [여기](https://sk4cks.github.io/virtualmachine/vm00003/)를 클릭하여 설치하고 오자.
+
+## 2. docker 설치
+
+- 설치
+  ```powershell
+  choco install docker-for-windows --ignore-checksums -y
+  ```
+- 설치 후 환경변수 설정
+
+  ```powershell
+  refreshenv   # 이 명령어를 입력 했는데 오류가 나면 오류 메시지에 나온대로
+
+  Import-Module "$env:ChocolateyInstall\helpers\chocolateyInstaller.psm1" #입력 후
+  refreshenv # 다시 입력해주면 환경변수가 설정된다.
+  ```
+
+- cmd 껏다 키기
+
+## 3. docker 설치 확인
+
+```powershell
+$ docker version
+    Client:
+    Version:           27.2.0
+    API version:       1.47
+    Go version:        go1.21.13
+    Git commit:        3ab4256
+    Built:             Tue Aug 27 14:17:17 2024
+    OS/Arch:           windows/amd64
+    Context:           desktop-linux
+
+    Server: Docker Desktop 4.34.2 (167172)
+    Engine:
+    Version:          27.2.0
+    API version:      1.47 (minimum version 1.24)
+    Go version:       go1.21.13
+    Git commit:       3ab5c7d
+    Built:            Tue Aug 27 14:15:15 2024
+    OS/Arch:          linux/amd64
+    Experimental:     false
+    containerd:
+    Version:          1.7.20
+    GitCommit:        8fc6bcff51318944179630522a095cc9dbf9f353
+    runc:
+    Version:          1.1.13
+    GitCommit:        v1.1.13-0-g58aa920
+    docker-init:
+    Version:          0.19.0
+    GitCommit:        de40ad0
+```
+
+이런식으로 안나오면 도커가 실행이 되어있는지 확인한다.
+
+## 4. Ubuntu 설치
+
+- 풀 받을수 있는 리스트 보기
+
+  ```powershell
+  PS C:\WINDOWS\system32> docker search ubuntu
+  NAME                             DESCRIPTION                                      STARS     OFFICIAL
+  ubuntu                           Ubuntu is a Debian-based Linux operating sys…   17299     [OK]
+  ubuntu/nginx                     Nginx, a high-performance reverse proxy & we…   119
+  ubuntu/squid                     Squid is a caching proxy for the Web. Long-t…   98
+  ubuntu/cortex                    Cortex provides storage for Prometheus. Long…   4
+  ubuntu/zookeeper                 ZooKeeper maintains configuration informatio…   13
+  ubuntu/kafka                     Apache Kafka, a distributed event streaming …   51
+  ubuntu/apache2                   Apache, a secure & extensible open-source HT…   76
+  ubuntu/prometheus                Prometheus is a systems and service monitori…   66
+  ubuntu/bind9                     BIND 9 is a very flexible, full-featured DNS…   97
+  ubuntu/postgres                  PostgreSQL is an open source object-relation…   40
+  ubuntu/mysql                     MySQL open source fast, stable, multi-thread…   64
+  root@95a62f03761f:~#
+  ubuntu/jre                       Distroless Java runtime based on Ubuntu. Lon…   16
+  ubuntu/redis                     Redis, an open source key-value store. Long-…   22
+  ubuntu/dotnet-aspnet             Chiselled Ubuntu runtime image for ASP.NET a…   22
+  ubuntu/grafana                   Grafana, a feature rich metrics dashboard & …   12
+  ubuntu/dotnet-deps               Chiselled Ubuntu for self-contained .NET & A…   16
+  ubuntu/dotnet-runtime            Chiselled Ubuntu runtime image for .NET apps…   20
+  ubuntu/memcached                 Memcached, in-memory keyvalue store for smal…   5
+  ubuntu/prometheus-alertmanager   Alertmanager handles client alerts from Prom…   9
+  ubuntu/python                    A chiselled Ubuntu rock with the Python runt…   15
+  ubuntu/telegraf                  Telegraf collects, processes, aggregates & w…   4
+  ubuntu/chiselled-jre             [MOVED TO ubuntu/jre] Chiselled JRE: distrol…   3
+  ubuntu/mimir                     Ubuntu ROCK for Mimir, a horizontally scalab…   0
+  ubuntu/mlflow                    MLFlow: for managing the machine learning li…   3
+  ```
+
+- Ubuntu 20.04 풀받기
+  ```powershell
+  PS C:\WINDOWS\system32> docker pull ubuntu:20.04
+  ```
+- 이미지 확인하기
+  ```powershell
+  PS C:\WINDOWS\system32> docker images
+  REPOSITORY   TAG       IMAGE ID       CREATED       SIZE
+  ubuntu       20.04     9df6d6105df2   6 weeks ago   72.8MB
+  ```
+
+## 5. Ubuntu 실행
+
+```powershell
+PS C:\WINDOWS\system32> docker run -it -p 2222:22 --name myUbuntu ubuntu:20.04 /bin/bash
+```
+
+-p 옵션을 이용하여 포트포워딩을 하는 이유는 local에서 2222포트로 접속시 ubuntu에 ssh 포트로 연결하기 위함이다.
+
+## 6. ssh 접속 설정
+
+### 1. ssh 설정에 필요한것 설치
+
+```bash
+apt-get update
+apt-get install openssh-server
+apt-get install net-tools
+apt-get install vim
+```
+
+### 2. sshd_config 설정 변경
+
+```bash
+vi /etc/ssh/sshd_config
+```
+
+```vim
+PasswordAuthentication yes
+PermitRootLogin yes
+```
+
+이 두가지 설정을 변경후 ssh 재시작
+
+```bash
+service ssh restart
+```
+
+### 3. 컨테이너 root계정 비밀번호 변경
+
+```bash
+passwd root
+```
+
+명령어 실행후 새로운 비밀번호 적용
+
+## 7. local에서 접속 테스트
+
+```bash
+ssh -p 2222 root@127.0.0.1
+```
+
+- Docker 컨테이너의 IP 주소 (172.17.0.2)는 Docker 브리지 네트워크 내에서 사용되며, 외부에서 직접 접근할 수 없습니다.
+- 컨테이너의 SSH 포트에 접근하기 위해서는 포트 포워딩을 설정하고, 호스트의 127.0.0.1 주소를 사용해야 합니다.
+
+## 8. 도커 명령어 모음집
+
+- `docker version` : 도커 실행중인지 확인
+- `docker pull ubuntu:20.04` : 우분투 이미지 다운로드
+- `docker images` : 이미지 확인하기
+- `docker run -it -p 2222:22 --name myUbuntu ubuntu:20.04 /bin/bash` : 우분투 컨테이너 실행하기
+  - 다양한 실행 옵션들
+    - `-d` : detached mode (백그라운드 모드)
+    - `-p` : Host와 컨테이너의 Port를 연결 (fowarding)
+    - `-v` : Host와 컨테이너의 Directory 연결 (마운트)
+    - `-e` : 컨테이너 내에서 사용할 환경변수 설정
+    - `-it` : -i와 -t를 동시에 사용한 것으로 터미널 입력을 위한 옵션
+    - `--rm` : 프로세스 종료시 컨테이너 자동 제거
+    - `--link` : 컨테이너 연결[컨테이너명:별칭]
+    - `--name` : 컨테이너 이름 설정
+- `docker ps` : 실행중인 컨테이너 확인하기
+- `docker ps -a` : 모든 컨테이너 확인하기
+- `docker start myUbuntu` : 종료된 우분투 컨테이너 실행하기
+- `docker attach myUbuntu` : 우분투 컨테이너 접속하기
+- `Ctrl+p` + `Ctrl+q` : 컨테이너 종료하지 않고 빠져나가기
+- `docker stop myUbuntu` : 우분투 컨테이너 종료하기
+- `docker rmi ubuntu:20.04` : 이미지 제거하기(제거하려면 컨테이너 먼저 제거해야함)
+- `docker rm myUbuntu` : 컨테이너 제거하기

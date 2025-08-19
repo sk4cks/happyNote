@@ -1,0 +1,91 @@
+---
+title: 'Chocolatey를 이용하여 초간단 Vagrant 설치'
+date: 2024-08-29
+tags: ['window', 'chocolatey', 'vm']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+📌 PowerShell 3버전 이상<br/>
+📌 .NET Framework 4.5 이상
+
+## 1. PowerShell 관리자 권한으로 실행
+
+- 먼저 `Get-ExecutionPolicy`를 실행해서 이 값이 `Restricted`가 아닌 것을 확인해주세요.
+
+  ```powershell
+  $ Get-ExecutionPolicy
+  ```
+
+- 만약 `Restricted`라면 `AllSigned`나 `Bypass`로 설정해줍니다.
+
+  ```powershell
+  # ExcutionPolicy를 AllSigned로 설정
+  $ Set-ExecutionPolicy AllSigned
+
+  # ExcutionPolicy를 Bypass로 설정
+  $ Set-ExecutionPolicy Bypass -Scope Process
+  ```
+
+## 2. Chocolatey 설치
+
+- 아래 스크립트를 복사해서 실행
+  ```powershell
+  $ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+  ```
+
+## 3. Chocolatey 설치 확인
+
+```powershell
+$ choco
+Chocolatey v0.10.15
+Please run 'choco -?' or 'choco <command> -?' for help menu.
+```
+
+## 4. VirtualBox 설치
+
+```powershell
+$ choco install -y virtualbox //설치
+$ choco uninstall virtualbox //삭제
+```
+
+## 5. Vagrant 설치
+
+```powershell
+$ choco install -y vagrant //설치
+$ choco uninstall vagrant //삭제
+```
+
+## 6. reboot 후 vagrant init
+
+```powershell
+$ vagrant # 1. 바그란트 설치가 잘 되었는지 확인
+
+$ mkdir vagrant # 2.본인이 원하는곳에 vagrant 작업 폴더를 생성
+
+$ cd vagrant
+$ vagrant init # 3. Vagrantfile 생성
+```
+
+## 7. 운영체제 설정
+
+새로 생성된 Vagrantfile을 열어서 vm.box부분을 원하는 운영체제로 수정
+
+```powershell
+config.vm.box = "bento/ubuntu-20.04"
+```
+
+## 8. vagrant 실행 후 접속
+
+```powershell
+$ vagrant up # 실행
+$ vagrant ssh # ssh 접속
+
+$ vagrant halt # vagrant 종료
+```

@@ -1,0 +1,42 @@
+---
+title: 'React Lifecycle hooks'
+date: 2024-08-11
+tags: ['javascript', 'react-js']
+draft: false
+layout: PostSimple
+---
+
+## OnMount
+
+```javascript
+useEffect(() => {
+  console.log("컴포넌트 로드시 처음 한번만 이벤트 발생");
+}, []);
+```
+
+## OnUnMount
+
+```javascript
+useEffect(() => {
+  return () => {
+    console.log("컴포넌트 사라질때 한번만 이벤트 발생");
+  };
+}, []);
+```
+
+### 알아야 할것
+
+```javascript
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+/*React.StrictMode는 React가 production mode의 Strict Mode에서 컴포넌트의 순수성을 검사하기 위해 useEffect를 두번 실행함*/
+```
+
+- React.StrictMode는 개발자들에게 해당 코드가 잠재적으로 문제가 있을 수 있음을 알리기 위해서 '개발 모드에서' 사용되는 기능
+- React.StrictMode는 개발 환경에서만 동작하며, 실제 배포 환경에서는 동작하지 않음
+
+개발하면서 두번 실행되는게 싫으면 React.StrictMode 태그를 지우면 두번 실행되는 현상이 발생하지 않음

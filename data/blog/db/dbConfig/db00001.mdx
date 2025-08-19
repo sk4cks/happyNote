@@ -1,0 +1,98 @@
+---
+title: '👌 rhel8 폐쇄망에 postgresql 15.1 설치'
+date: 2025-06-12
+tags: ['db', 'postgresql']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. 인터넷 되는 환경에서 설치파일 준비
+
+## 1-1. createrepo 준비
+
+```bash
+# createrepo 및 의존성 패키지 다운로드
+sudo dnf install --downloadonly --downloaddir=./createrepo_rpms createrepo
+
+# 설치파일 압축하기
+tar -czvf createrepo_rpms.tar.gz createrepo_rpms/
+
+# 설치파일을 usb에 복사
+```
+
+## 1-2. postgresql 15.1 준비
+
+```bash
+# PostgreSQL 공식 YUM 저장소 설정
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+
+# AppStream PostgreSQL 모듈 사용 안 함 (기본 PostgreSQL 10 제거)
+sudo dnf -qy module disable postgresql
+
+# PostgreSQL 15.1 RPM 패키지 및 의존성 다운로드
+sudo dnf install --downloadonly --downloaddir=./postgresql15.1-rpms postgresql15-15.1 postgresql15-server-15.1 postgresql15-libs-15.1 postgresql15-contrib-15.1
+
+# 설치파일 압축하기
+tar -czvf postgresql15.1-rpms.tar.gz postgresql15.1-rpms/
+
+# 설치파일을 usb에 복사
+```
+
+# 2. 폐쇄망에 설치파일 복사 후 설치
+
+## 2-1. createrepo 복사 후 설치
+
+```bash
+# createrepo_rpms.tar.gz 복사 후 압축 해제
+tar -zxvf createrepo_rpms.tar.gz
+
+# createrepo rpm파일들 실행
+sudo rpm -ivh createrepo_rpms/*.rpm
+```
+
+## 2-2. postgresql 15.1 복사 후 설치
+
+```bash
+# postgresql15.1-rpms.tar.gz 복사 후 압축 해제
+tar -zxvf postgresql15.1-rpms.tar.gz
+
+# 로컬 저장소 생성
+createrepo /{경로}/postgresql15.1-rpms
+
+# 로컬 저장소 설정
+sudo tee /etc/yum.repos.d/local-postgresql.repo <<EOF
+[local-postgresql]
+name=Local PostgreSQL 15
+baseurl=file://{경로}/postgresql15.1-rpms
+enabled=1
+gpgcheck=0
+EOF
+
+# 저장소 캐시 갱신
+sudo dnf clean all
+
+# 로컬 저장소를 사용하여 postgresql 설치
+sudo dnf install -y --repo=local-postgresql postgresql15-15.1 postgresql15-server-15.1 postgresql15-libs-15.1 postgresql15-contrib-15.1
+
+# DB 초기화
+sudo /usr/pgsql-15/bin/postgresql-15-setup initdb
+
+# 서비스 활성화 및 시작
+sudo systemctl enable postgresql-15
+sudo systemctl start postgresql-15
+
+# DB 버전 확인
+psql --version
+
+# 서비스 상태 확인
+sudo systemctl status postgresql-15
+
+# 접속 테스트
+sudo -u postgres psql -c "SELECT version();"
+```

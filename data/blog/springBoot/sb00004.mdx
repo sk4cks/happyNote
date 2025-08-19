@@ -1,0 +1,46 @@
+---
+title: 'Mapper Test Code 작성하기'
+date: 2024-08-18
+tags: ['java', 'springboot']
+draft: false
+layout: PostSimple
+---
+
+### 의존성 주입
+
+```java
+dependencies {
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.6.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.6.0'
+}
+```
+
+### 테스트 코드 작성
+
+```java
+//@SpringBootTest //전체 애플리케이션 컨텍스트를 로드함
+@MybatisTest //MyBatis와 관련된 빈만 로드함
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE) //DataSource를 교체하지 않고 실제 연결된 DB 사용
+class MyPapperTest{
+
+    @AutoWired
+    MyMapper myMapper;
+
+    @Test
+    void getMyFavorite() {
+        //given
+        MyVO myVO = MyVO.builder()
+                .name("나카롱")
+                .favorite("choco")
+                .build();
+
+        //when
+        MyVO res =  this.myMapper.getMyFavorite(myVO);
+
+        //then
+        Assert.assertEquals("choco",res.getFavorite());
+    }
+}
+
+```

@@ -1,0 +1,187 @@
+---
+title: '🍙[스프링 시큐리티 OAuth2] oauth2Client()'
+date: 2025-02-24
+tags: ['springboot', 'spring-security']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. OAuth2ClientConfigurer 초기화 및 설정
+
+![Image](https://github.com/user-attachments/assets/60c1fc62-29ea-4435-b43e-8fb809488a5a)
+
+![Image](https://github.com/user-attachments/assets/8c0964ff-dd6b-4e3c-b386-54c51edca687)
+
+# 2. OAuth2AuthorizationCodeGrantFilter – Authorization Code Grant Support
+
+## ✔️개념
+
+- Authorization Code Grant 방식으로 권한 부여 요청을 지원하는 필터
+- 인가서버로부터 리다이렉트 되면서 전달된 code 를 인가서버의 Access Token 으로 교환한다.
+- OAuth2AuthorizedClientRepository 를 사용하여 OAuth2AuthorizedClient 를 저장 후 클라이언트의 Redirect Uri 로 이동한다
+- ![Image](https://github.com/user-attachments/assets/100ad224-0e0c-44d6-a0f4-f2e63cbd42a7)
+
+- **실행 조건**
+  - 요청 파라미터에 code 와 state 값이 존재하는지 확인
+  - OAuth2AuthorizationRequest 객체가 존재하는지 확인
+
+# 3. OAuth2AuthorizedClient – 권한부여 클라이언트
+
+## ✔️개념
+
+- OAuth2AuthorizedClient 는 인가받은 클라이언트를 의미하는 클래스다.
+- 최종 사용자(리소스 소유자)가 클라이언트에게 리소스에 접근할 수 있는 권한을 부여하면, 클라이언트를 인가된 클라이언트로 간주한다
+- OAuth2AuthorizedClient 는 AccessToken 과 RefreshToken 을 ClientRegistration (클라이언트)와 권한을 부여한 최종 사용자인 Principal과 함께 묶어 준다
+- OAuth2AuthorizedClient 의 AccessToken 을 사용해서 리소스 서버의 자원에 접근 할 수 있으며 인가서버와의 통신으로 토큰을 검증할 수 있다
+- OAuth2AuthorizedClient 의 ClientRegistration 과 AccessToken 을 사용해서 UserInfo 엔드 포인트로 요청할 수 있다
+- ![Image](https://github.com/user-attachments/assets/f142bc4f-b5c2-433f-a0a1-cde11a41647b)
+
+- **OAuth2AuthorizedClientRepository**
+
+  - OAuth2AuthorizedClientRepository 는 다른 웹 요청이 와도 동일한 OAuth2AuthorizedClient 를 유지하는 역할을 담당한다.
+  - OAuth2AuthorizedClientService 에게 OAuth2AuthorizedClient 의 저장, 조회, 삭제 처리를 위임한다
+  - ![Image](https://github.com/user-attachments/assets/f70ce141-8091-4a55-947a-0d52f8d882c8)
+
+- **OAuth2AuthorizedClientService**
+
+  - OAuth2AuthorizedClientService 는 어플리케이션 레벨에서 OAuth2AuthorizedClient 를 관리(저장, 조회, 삭제 )하는 일이다.
+  - ![Image](https://github.com/user-attachments/assets/1c43c7dc-1f12-412a-83ad-df5ba1026718)
+
+- **웹 어플리케이션에서 활용**
+  - OAuth2AuthorizedClientRepository 나 OAuth2AuthorizedClientService 는 OAuth2AuthorizedClient 에서 OAuth2AccessToken 을 찾을 수 있는 기능을 제공하므로 보호중인 리소스 요청을 시작할 때 사용할 수 있다
+  - ![Image](https://github.com/user-attachments/assets/6b39a9d3-7240-4f71-a138-bc48dbbf334a)
+
+# 4. DefaultOAuth2AuthorizedClientManager – 클라이언트 인가 관리자
+
+## 4-1). 개념
+
+### ✔️개념
+
+- OAuth2AuthorizedClient 를 전반적으로 관리하는 인터페이스
+- OAuth2AuthorizedClientProvider 로 OAuth 2.0 클라이언트에 권한 부여
+  - Client Credentials Flow
+  - Resource Owner Password Flow
+  - Refresh Token Flow
+- OAuth2AuthorizedClientService 나 OAuth2AuthorizedClientRepository 에 OAuth2AuthorizedClient 저장을 위임한 후 OAuth2AuthorizedClient 최종 반환
+- 사용자 정의 OAuth2AuthorizationSuccessHandler 및 OAuth2AuthorizationFailureHandler 를 구성하여 성공/실패 처리를 변경할 수 있다.
+- invalid_grant 오류로 인해 권한 부여 시도가 실패하면 이전에 저장된 OAuth2AuthorizedClient가 OAuth2AuthorizedClientRepository 에서 제거된다
+- ![Image](https://github.com/user-attachments/assets/698da69c-c176-44c6-b44e-5957812af9a6)
+
+### ✔️특징
+
+![Image](https://github.com/user-attachments/assets/b9173946-f7cc-4126-a640-8e108eb9482e)
+
+### ✔️구조
+
+![Image](https://github.com/user-attachments/assets/20b78c8c-e6de-43eb-91bf-b4271c42b8ff)
+
+### ✔️생성
+
+```java
+@Bean
+public OAuth2AuthorizedClientManager authorizedClientManager(ClientRegistrationRepository clientRegistrationRepository,
+OAuth2AuthorizedClientRepository authorizedClientRepository) {
+	OAuth2AuthorizedClientProvider authorizedClientProvider =
+		OAuth2AuthorizedClientProviderBuilder.builder()
+			.authorizationCode()
+			.refreshToken()
+			.clientCredentials()
+			.password()
+			.build();
+
+	DefaultOAuth2AuthorizedClientManager authorizedClientManager =
+		new DefaultOAuth2AuthorizedClientManager(
+			clientRegistrationRepository, authorizedClientRepository);
+	authorizedClientManager.setAuthorizedClientProvider(authorizedClientProvider);
+
+	return authorizedClientManager;
+}
+```
+
+## 4-2). 인가서버와 연동하여 로그인 구현
+
+### 4-2-1). 기본 환경 구성
+
+**✔️개요**
+
+- 스프링 시큐리티의 OAuth2Login 필터에 의한 자동 인증처리를 하지 않고 DefaultOAuth2AuthorizedClientManager 클래스를 사용하여 Spring MVC 에서 직접 인증처리를 하는 로그인 기능을 구현한다.
+
+```java
+@Bean
+SecurityFilterChain oauth2SecurityFilterChain(HttpSecurity http) throws Exception {
+	http.authorizeRequests((requests) -> requests.antMatchers("/","/oauth2Login","/client").permitAll().anyRequest().authenticated());
+	http
+		// .oauth2Login().and()
+		.oauth2Client();
+	http.logout().invalidateHttpSession(true)
+		.deleteCookies("JSESSIONID")
+		.clearAuthentication(true);
+
+	return http.build();
+}
+```
+
+**✔️기본 구성**
+
+- AppConfig – DefaultOAuth2AuthorizedClientManager 빈 생성 및 설정 초기화
+- DefaultOAuth2AuthorizedClientManager – OAuth2 권한 부여 흐름을 처리
+- LoginController – DefaultOAuth2AuthorizedClientManager 를 사용해서 로그인 처리
+- home.html – 인증받은 사용자만 접근가능
+- Index.html, client.html – 아무나 접근 가능
+- application.yml - 권한 부여 유형을 client_credentials, password, refresh 타입으로 설정한다
+
+**✔️로그인 구현 순서**
+
+1. DefaultOAuth2AuthorizedClientManager 빈 생성 및 파라미터 초기 값들을 정의한다
+2. 권한 부여 유형에 따라 요청이 이루어도록 application.yml 설정을 조정한다
+3. /oauth2Login 주소로 권한 부여 흐름을 요청한다
+4. DefaultOAuth2AuthorizedClientManager 에게 권한 부여를 요청한다
+5. 권한 부여가 성공하면 OAuth2AuthorizationSuccessHandler 를 호출하여 인증 이후 작업을 진행한다
+   1. DefaultOAuth2AuthorizedClientManager 의 최종 반환값인 OAuth2AuthorizedClient 를 OAuth2AuthorizedClientRepository 에 저장한다
+6. OAuth2AuthorizedClient 에서 Access Token 을 참조하여 /userinfo 엔드포인트 요청으로 최종 사용자 정보를 가져온다
+7. 사용자 정보와 권한을 가지고 인증객체를 만든 후 SecurityContext 에 저장하고 인증을 완료한다
+8. 인증이 성공하면
+9. 1~8 번의 과정을 커스텀 필터를 만들어서 처리하도록 한다
+
+### 4-2-2). Client Credentials Flow
+
+![Image](https://github.com/user-attachments/assets/7463f25b-b808-48c4-9a0a-19f57a69d976)
+
+### 4-2-3). Resource Owner Password Flow
+
+![Image](https://github.com/user-attachments/assets/8849936e-e145-4e88-8d35-6f3881b8b261)
+
+![Image](https://github.com/user-attachments/assets/fe4273dc-7076-4b6d-a134-399e6d723105)
+
+### 4-2-4). Refresh Token Flow
+
+![Image](https://github.com/user-attachments/assets/85fa06f2-5d69-4abf-ae8f-1d70d2709b5e)
+
+# 5. OAuth2 커스텀 로그인 필터 구현
+
+![Image](https://github.com/user-attachments/assets/bf693f27-982e-4750-9022-abbd02eabc00)
+
+# 6. @RegisteredOAuth2AuthorizedClient
+
+### ✔️@RegisteredOAuth2AuthorizedClient
+
+- 파라미터를 OAuth2AuthorizedClient 타입 인자로 리졸브해준다
+- OAuth2AuthorizedClientArgumentResolver 에서 요청을 가로채어 유형별로 권한 부여 흐름을 실행하도록 한다
+- 이 방법은 OAuth2AuthorizedClientManager 나 OAuth2AuthorizedClientService 로 OAuth2AuthorizedClient 에 접근하는 것보다 편리하다
+  ```java
+  @GetMapping("/")
+  public String index(@RegisteredOAuth2AuthorizedClient(“keycloak") OAuth2AuthorizedClient authorizedClient) {
+  		OAuth2AccessToken accessToken = authorizedClient.getAccessToken();
+  	return "index";
+  }
+  ```
+  ➡️ @RegisteredOAuth2AuthorizedClient 를 선언하고 OAuth2AuthorizedClient 를 인자로 지정한 메서드이면 OAuth2AuthorizedClientArgumentResolver 가 실행되면서 OAuth2AuthorizedClientManager 를 통해 인가 처리한다
+  ![Image](https://github.com/user-attachments/assets/eb77a5ed-7b7c-4240-8498-4131b97df326)
+
+![Image](https://github.com/user-attachments/assets/23326a85-8f62-45f2-a0e9-6f637d12f05c)

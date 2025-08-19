@@ -1,0 +1,124 @@
+---
+title: '🔄️ postgresql 15 아카이브 백업/복구'
+date: 2025-06-20
+tags: ['db', 'postgresql']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. 베이스 백업
+
+```bash
+# 베이스 백업 받기
+pg_basebackup -D /var/lib/pgsql/15/backups/base -Fp -Xs -P
+
+# 확인
+ls -l /var/lib/pgsql/15/backups/base
+```
+
+# 2. 아카이브 백업 설정
+
+```bash
+# archive 폴더 생성
+mkdir -p /var/lib/pgsql/15/archive
+
+# postgresql.conf 설정
+vi /var/lib/pgsql/15/data/postgresql.conf
+
+wal_level = replica
+archive_mode = on
+archive_command = 'test ! -f /var/lib/pgsql/15/archive/%f && cp %p /var/lib/pgsql/15/archive/%f'
+archive_timeout = 60
+
+# postgresql 서비스 재시작
+sudo systemctl restart postgresql-15
+
+# archive_command가 정상 작동하는지 확인
+psql -c "select pg_switch_wal();"
+
+# 아카이브 디렉터리 확인
+ls -l /var/lib/pgsql/15/archive
+
+# 아카이브 7일 이상된 wal 및 백업 파일 삭제 스크립트 설정
+vi /usr/local/bin/pg_archive_cleanup.sh
+
+--------------------------------------------------------------------
+#!/bin/bash
+ARCHIVE_DIR="/var/lib/pgsql/15/archive"
+RETENTION_DAYS=7
+
+# 오래된 WAL 파일 삭제
+find $ARCHIVE_DIR -type f -name "*.backup" -mtime +$RETENTION_DAYS -delete
+find $ARCHIVE_DIR -type f -name "0000*" -mtime +$RETENTION_DAYS -delete
+
+# 디스크 공간 확인
+df -h $ARCHIVE_DIR
+--------------------------------------------------------------------
+
+# 권한 설정
+sudo chmod +x /usr/local/bin/pg_archive_cleanup.sh
+
+# 크론잡 설정
+sudo crontab -u postgres -e
+
+# 매일 새벽 2시 실행
+0 2 * * * /usr/local/bin/pg_archive_cleanup.sh >> /var/log/pg_archive_cleanup.log 2>&1
+
+# 로그 파일 생성
+touch /var/log/pg_archive_cleanup.log
+chown postgres.postgres /var/log/pg_archive_cleanup.log
+```
+
+# 3. 아카이브 복구
+
+```bash
+# DB 접속
+psql
+
+# 테스트 데이터 생성
+CREATE TABLE test_table (id SERIAL, data TEXT);
+INSERT INTO test_table (data) VALUES ('test data');
+
+# 수동 wal 전환
+SELECT pg_switch_wal();
+# 전환한 wal 파일 이름 조회 (/var/lib/pgsql/15/archive 이 경로에서 확인가능)
+SELECT pg_walfile_name(pg_switch_wal());
+
+# postgresql 서버 종료
+sudo systemctl stop postgresql-15
+
+# 기존 데이터 디렉토리 제거 및 백업 복사
+mv /var/lib/pgsql/15/data /var/lib/pgsql/15/data_old
+cp -rp /var/lib/pgsql/15/backups/base /var/lib/pgsql/15/data
+chown -R postgres.postgres /var/lib/pgsql/15/data
+
+# 베이스 백업 받았던 시점이랑 설정이 변경된거 있으면 동일하게 맞추기
+vi /var/lib/pgsql/15/data/postgresql.conf
+vi /var/lib/pgsql/15/data/pg_hba.conf
+
+# 복구 커맨드 적용
+vi /var/lib/pgsql/15/data/postgresql.conf
+##################################################################
+restore_command = 'cp /var/lib/pgsql/15/archive/%f %p'
+##################################################################
+
+# 복구 신호 파일 생성 (복구 후에 자동 삭제됨)
+touch /var/lib/pgsql/15/data/recovery.signal
+
+# 특정 시점까지 복구하려면 postgresql.conf에 recovery_target_time 설정
+# 제일 최신까지 복구하려면 recovery_target_time 설정 X
+vi /var/lib/pgsql/15/data/postgresql.conf
+recovery_target_time = '2025-06-03 14:00:00'
+
+# postgresql 서버 시작
+sudo systemctl start postgresql-15
+
+# 로그 확인(/var/lib/pgsql/15/data/log/{오늘 요일 로그})
+database system is ready to accept connections
+```

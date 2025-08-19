@@ -1,0 +1,22 @@
+---
+title: '[Linux] Tomcat JDK 설정'
+date: 2024-08-30
+tags: ['linux', 'tomcat']
+draft: false
+layout: PostSimple
+---
+
+> 💡기존 JDK버전을 사용중에 톰캣을 다른 JDK버전으로 사용할때 적용하는 방법입니다.
+
+### 1. JAVA 경로 수동 지정(기존 운영 서버 JAVA_HOME 버전과 상이함으로 별도 지정 필요)
+
+- Tomcat설치경로/bin/setclasspath.sh 수정
+  ```vim
+  JAVA_HOME=/usr/local/jdk11 #JAVA_HOME 경로 추가
+  ```
+
+### 2. 톰캣 실행 후 JDK버전 확인
+
+```bash
+$ Tomcat경로/bin/startup.sh  #startup.sh 실행 후 java버전 확인
+```
