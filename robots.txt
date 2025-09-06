@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://happy-note.vercel.app
+Sitemap: https://happy-note.vercel.app/sitemap.xml
