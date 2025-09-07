@@ -33,7 +33,7 @@ public class OAuth2ResourceServerConfig {
 - API 설정
   - SecurityFilterChain 타입의 빈을 생성해서 보안 필터를 구성한다
   - HttpSecurity 에 있는 oauth2ResourceServer().jwt() API 를 정의하고 빌드한다
-    <img src="/static/images/springBoot/image00000005.png" />
+    <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000005.png`} />
 
 ## ✓ 검증 프로세스 이해
 
@@ -57,7 +57,7 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri = http://localhost:8080/rea
 6. Authentication 객체를 생성하고 Jwt 객체를 principal 속성에는 저장한다
 7. Authentication 를 SecurityContext 에 저장하고 인증을 완료한다
 
-<img src="/static/images/springBoot/image00000006.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000006.png`} />
 
 # 2. JwtDecoder 이해
 
@@ -66,19 +66,19 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri = http://localhost:8080/rea
 ### ✓ JwtDecoder 소개
 
 - <b>JwtDecoder 는 문자열로 된 JWT(JSON Web Token)를 컴팩트 클레임 표현 형식에서 <span style={{color: 'red'}}>Jwt 인스턴스로 "디코딩"</span>하는 역할을 한다.</b>
-  <img src="/static/images/springBoot/image00000007.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000007.png`} />
 - <b>JwtDecoder 는 JWT 가 JSON 웹 서명(JWS) 구조로 생성된 경우 <span style={{color: 'red'}}>JWS 서명에 대한 검증</span>의 책임이 있다.</b>
-  <img src="/static/images/springBoot/image00000008.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000008.png`} />
 - <b>기본 구현체로 NimbusJwtDecoder 가 있다</b>
 
 ### ✓ NimbusJwtDecoder
 
-<img src="/static/images/springBoot/image00000009.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000009.png`} />
 
 ### ✓ 검증 세부 흐름
 
 - JwtDecoder 의 decode() 를 통해 검증에 성공하면 최종적으로 Jwt 타입의 인증객체를 반환한다
-  <img src="/static/images/springBoot/image00000010.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000010.png`} />
 
 ## 2-2). 생성 방법
 

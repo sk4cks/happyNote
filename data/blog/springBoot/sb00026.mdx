@@ -57,7 +57,7 @@ layout: PostSimple
 
 ## OAuth2ResourceServerProperties (prefix = “spring.security.oauth2.resourceserver“)
 
-<img src="/static/images/springBoot/image00000002.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000002.png`} />
 - **jwkSetUri** 은 인가 서버에서 서명한 토큰의 위치를 나타낸다
 - **issuerUri** 는 인가서버의 위치를 나타낸다
 - **publicKeyLocation** 은 공개키를 가지고 있는 파일의 위치를 나타낸다
@@ -107,8 +107,8 @@ spring:
 
 # 3. AuthenticationEntryPoint
 
-<img src="/static/images/springBoot/image00000003.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000003.png`} />
 
 # 4. 자동설정에 의한 초기화 과정
 
-<img src="/static/images/springBoot/image00000004.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000004.png`} />

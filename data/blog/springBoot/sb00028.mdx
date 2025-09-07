@@ -21,20 +21,20 @@ layout: PostSimple
 - **JCA & JCE 프레임워크는 프로바이더 보안 구조를 사용하여 보안과 관련한 다양한 API를 제공하고 있다**
 - 프로바이더는 java.security.Provider 클래스의 구현체로 보안 알고리즘 구현체 목록을 포함하고 있고 이를 통해 보안 서비스를 구현할 수 있다.
 - 예를 들어 특정 알고리즘의 인스턴스가 필요해지면, JCA & JCE 프레임워크는 프로바이더 저장소에서 해당 알고리즘의 적합한 구현체 클래스를 찾아 클래스 인스턴스를 생성하는데 프로바이더를 직접 지정할 수도 있다
-<img src="/static/images/springBoot/image00000011.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000011.png`} />
 
 ### ✓ MessageDigest
 - 메시지 다이제스트의 목적은 원본 파일이 그대로인지 파악하는 무결성 검사이다.
 - 메시지 다이제스트 알고리즘은 입력 값으로 전달된 다양한 길이의 원본 값을 고정 길이 해시 값으로 출력한다.
 - 이 알고리즘은 단방향이기 때문에 해시 값에서 거꾸로 원본 값을 도출할 수 없다.
-<img src="/static/images/springBoot/image00000012.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000012.png`} />
 - 갑과 을의 교신 상황에서 갑은 을에게 전달하고자 하는 원본과 그 원본의 메시지 해시 값 그리고 메시지 다이제스트 알고리즘을 보낸다.
 - 을은 갑이 전달한 알고리즘과 원본을 가지고 메시지 해시 값을 계산한다.
 - 을이 계산한 메시지 해시 값과 갑이 전달한 메시지 해시 값이 일치하면, 갑이 전달한 원본이 네트워크를 통해 을에게 오기까지 변경되지 않았다는 것을 확인할 수 있다.
 
 ### ✓ Signature
 - Signature는 초기화 시 제공받은 키를 사용해서 데이터를 서명하고 전자 서명의 유효성을 검증 하는데 사용된다.
-<img src="/static/images/springBoot/image00000013.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000013.png`} />
 
 - **서명**
   - Signature 객체는 개인 키로 서명 하기 위해 초기화되고 서명할 원본 데이터가 제공된다.
@@ -66,7 +66,7 @@ layout: PostSimple
       - DECRYPT_MODE: cipher 객체를 복호화 모드로 초기화한다.
     - Cipher cipher = Cipher.getInstance("RSA");
     - cipher.init(Cipher.ENCRYPT_MODE, PrivateKey);
-    <img src="/static/images/springBoot/image00000014.png" />
+    <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000014.png`} />
 
 ## 1-2. 대칭키 & 비대칭키
 
@@ -81,7 +81,7 @@ layout: PostSimple
   - 메시지 다이제스트는 받은 측이 누구든 무결성 검사가 가능하지만, MAC은 오직 동일한 비밀 키를 가진 쪽에서만 전달받은 메시지의 무결성을 검사 할 수 있다.
   - 암호화 해시 함수(MD5, SHA256 등)를 기반으로 하는 MAC이 잘 알려진 HMAC이다.
   - HMAC은 메시지 다이제스트 알고리즘과 공유된 비밀 키의 조합으로 가능하며 데이터의 무결성과 기밀성, 송.수신자간 인증을 보증하기 위한 암호화 기법이다
-  <img src="/static/images/springBoot/image00000015.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000015.png`} />
 
 ### ✓ 비 대칭키 암호 (asymmetric-key algorithm)
 - 암호화 알고리즘의 한 종류로, 암호화와 복호화에 다른 암호 키를 쓰는 알고리즘을 의미한다.
@@ -95,7 +95,7 @@ layout: PostSimple
 
 - RSA (Ron <span style={{color: 'red'}}>R</span>ivest, Adi <span style={{color: 'red'}}>S</span>hamir, Leonard <span style={{color: 'red'}}>A</span>dleman 세 사람의 성을 따서 RSA 라고 이름이 붙은 암호 방식)
   - 현재 SSL/TLS에 가장 많이 사용되는 공개키 암호화 알고리즘으로 전세계 대부분의 인터넷 뱅킹(대한민국 포함)이 이 RSA-2048 암호화를 사용한다.
-  <img src="/static/images/springBoot/image00000016.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000016.png`} />
 
 ### ✓ Key 생성 모델
 - **Key**
@@ -112,7 +112,7 @@ layout: PostSimple
   - 어떤 키 데이터 객체를 다른 타입의 키 데이터 객체로 전환하는데 사용한다
 
 ### ✓ Key 계층 구조
-<img src="/static/images/springBoot/image00000017.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000017.png`} />
 
 # 2. JWT (JSON Web Token)
 
@@ -134,7 +134,7 @@ layout: PostSimple
   5. **JWA (JSON WEB ALGORITHM, RFC 7518)**
     - JWS, JWK 및 JWE에 필요한 알고리즘 목록으로 JWS 헤더 및 JWS 페이로드의 내용을 서명하는 데 사용된다
 
-<img src="/static/images/springBoot/image00000018.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000018.png`} />
 
 ### ✓ JWS 구조
 - **JOSE Header**
@@ -146,7 +146,7 @@ layout: PostSimple
 - **Signiture**
   - 서명은 Base64url 인코딩을 이용하여 헤더와 페이로드를 인코딩하고 이 둘을 점(.) 구분자로 함께 연결시킴으로써 계산되어 토큰을 안전하게 확인한다.
 
-<img src="/static/images/springBoot/image00000019.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000019.png`} />
 
 ### ✓ Claims
 - **개념**
@@ -154,11 +154,11 @@ layout: PostSimple
   - Claim Set은 키 부분인 Claim Name과 값 부분인 Claim Value의 여러 쌍으로 이루어져 있다. 
   - JWT 에는 여러개의 클레임들을 넣을 수 있다
 
-<img src="/static/images/springBoot/image00000020.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000020.png`} />
 
 ### ✓ JWT
-<img src="/static/images/springBoot/image00000021.png" />
-<img src="/static/images/springBoot/image00000022.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000021.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000022.png`} />
 
 ### ✓ 데이터 무결성과 취약점
 1. Payload 의 클레임 값을 변조하여 토큰을 생성한 후 전달하더라도 서명에서 해시된 값과 변조된 값의 해시된 값이 서로 일치하지 않기 때문에 검증이 실패하여 데이터의 안전성을 보장한다
@@ -171,15 +171,15 @@ layout: PostSimple
 - JwkSetUri 정보를 설정하면 인가서버로부터 JWK 형태의 정보를 다운로드할 수 있고 JWT 를 검증할 수 있다.
 
 ### ✓ JWK 구조
-<img src="/static/images/springBoot/image00000023.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000023.png`} />
 
 ### ✓ JWK 확장
 - 자바 표준 보안 클래스를 사용하여 대칭키, 비대칭키 방식의 JWT 의 암호화 및 전자서명, 이후 검증을 위한 키 생성, 변환 등을 지원한다
 - 구현체로서 **RSAKey, OctetSequenceKey, ECKey, OctetKeyPair** 가 있다
-  <img src="/static/images/springBoot/image00000024.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000024.png`} />
 
 ### ✓ JWKGenerator`<T extends JWK>`
-<img src="/static/images/springBoot/image00000025.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000025.png`} />
 
 - **암호화 알고리즘 방식에 따라 JWK 의 구현체가 있고 각 구현체를 편리하게 생성할 수 있는 제너레이터 클래스이다**
   - RSAKeyGenerator – 비대칭 암호화 알고리즘 키를 포함하는 JWK 생성기
@@ -196,7 +196,7 @@ layout: PostSimple
   ② 인가 서버에서 발행한 Access Token 을 대상으로 검증을 진행한다<br/>
 
   ✓ JwtDecoder 빈은 암호화 알고리즘 및 특정한 조건에 따라 각 생성되며 디코딩이 진행되면 주어진 알고리즘에 의해 검증하게 된다
-  <img src="/static/images/springBoot/image00000026.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000026.png`} />
 
 ### ✓ 토큰 검증 테스트
 1. **MAC 방식에 의한 검증 테스트**<br/>
@@ -242,7 +242,7 @@ layout: PostSimple
 ## 3-2. MAC 검증 기능 구현
 
 ### 3-2-1. JwtAuthorizationMacFilter 에 의한 검증
-<img src="/static/images/springBoot/image00000027.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000027.png`} />
 
 **✓ OAuth2ResourceServer**
 ```java
@@ -413,7 +413,7 @@ JwtDecoder jwtDecoderByJwkKeySetUri() {
 
 **✓ OAuth2ResourceServer**
 - 리소스 서버 설정 클래스로서 인가서버 엔드포인트인 JwkSetUri 방식에 의한 RSA 인증 및 인가 처리 설정을 한다
-  <img src="/static/images/springBoot/image00000028.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000028.png`} />
 
 # 4. Authentication / @AuthenticationPrincipal
 
@@ -428,7 +428,7 @@ JwtDecoder jwtDecoderByJwkKeySetUri() {
 
 ## ✓ @AuthenticationPrincipal
 - JwtAuthenticationToken 의 principal 에 저장되어 있는 Jwt 객체를 바로 참조할 수 있다
-  <img src="/static/images/springBoot/image00000029.png" />
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000029.png`} />
 
 # 5. BearerTokenAuthenticationFilter
-<img src="/static/images/springBoot/image00000030.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000030.png`} />

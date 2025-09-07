@@ -14,7 +14,7 @@ layout: PostSimple
 
 # 1. 파일 구성
 
-<p align="center"><img src="/static/images/springBoot/image00000001.png" /></p>
+<p align="center"><img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000001.png`} /></p>
 
 1.  각 OAuth2 서비스 제공자들의 연동을 통해 인증 및 인가 기능을 구현하고 공통항목은 추상화한다
 2.  OpenID Connect Provider 를 지원하는 서버와 지원하지 않는 서버에 대하여 스프링 시큐리티의 연동 처리를 위한 내부원리를 이해한다

@@ -59,12 +59,12 @@ static class OAuth2ResourceServerConfig {
 
 ## ✓ OpaqueTokenConfigurer / 초기화 과정
 
-<img src="/static/images/springBoot/image00000035.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000035.png`} />
 <br/><br/>
 
 # 2. 토큰 검사 및 프로세스 이해
 
-<img src="/static/images/springBoot/image00000036.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000036.png`} />
 
 ## ✓ OpaqueTokenIntrospector
 
@@ -73,7 +73,7 @@ static class OAuth2ResourceServerConfig {
 - OAuth2AuthenticatedPrincipal 은 BearerTokenAuthentication 의 principal 속성에 저장된다
 <br/>
 
-<img src="/static/images/springBoot/image00000037.png" />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000037.png`} />
 
 ## ✓ CustomOpaqueTokenIntrospector
 

@@ -1,11 +1,11 @@
 {
+  "java": 8,
   "git": 2,
   "gitlab": 1,
   "ssh": 1,
-  "java": 8,
+  "network": 1,
   "linux": 4,
   "curl": 1,
-  "network": 1,
   "springboot": 31,
   "window": 4,
   "sdkman": 1,
