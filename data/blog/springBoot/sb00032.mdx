@@ -1,0 +1,244 @@
+---
+title: '🧩[스프링 시큐리티 OAuth2] OAuth 2.0 Authorization Server Fundamentals'
+date: 2025-09-08
+tags: ['springboot', 'spring-security', 'authorization-server']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. OAuth 2.0 Authorization Server 소개
+
+## ✓ 소개
+
+- Spring Authorization Server는 OAuth 2.1 및 OpenID Connect 1.0 사양 및 기타 관련 사양의 구현을 제공하는 프레임워크
+- OpenID Connect 1.0 공급자 및 OAuth2 권한 부여 서버 제품을 구축하기 위한 안전하고 가볍고 사용자 지정 가능한 기반을 제공하기 위해 구축됨.
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000039.png`} />
+
+## ✓ 프로젝트 구성
+
+- Spring Boot 2.7.x 버전
+- JDK 11 이상
+- Gradle 빌드
+
+## ✓ 의존성 추가
+
+```groovy
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.security:spring-security-oauth2-authorization-server:0.3.1'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+}
+```
+
+# 2. 초기화 과정 이해
+
+## 2-1. OAuth2AuthorizationServerConfiguration
+
+### ✓ 아키텍처
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000040.png`} />
+
+### ✓ 소개
+
+- OAuth2 인가 서버에 대한 최소 기본 구성을 제공하는 설정 클래스이다
+- OAuth2AuthorizationServerConfigurer를 사용하여 기본 구성을 적용하고 OAuth2 인가 서버를 지원하는 모든 인프라 구성 요소로 구성된 SecurityFilterChain 빈을 등록한다
+```java
+@Configuration(proxyBeanMethods = false)
+public class OAuth2AuthorizationServerConfiguration {
+
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+        applyDefaultSecurity(http); // 인가서버의 기본 보안 구성을 작동시키며 시큐리티의 필터체인을 형성한다
+        return http.build();
+    }
+    
+    public static void applyDefaultSecurity(HttpSecurity http) throws Exception {
+        OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer<>();
+        RequestMatcher endpointsMatcher = authorizationServerConfigurer.getEndpointsMatcher(); // 인가서버의 엔드포인트 요청 매처 선언
+        
+        http
+            .requestMatcher(endpointsMatcher) // 인가서버로 오는 요청이 endpointsMatcher 와 매칭되면 인증&인가 프로세스가 작동된다
+            .authorizeRequests(authorizeRequests -> authorizeRequests.anyRequest().authenticated() )
+            .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher)) // endpointsMatcher 와 매칭되는 요청에 한해 csrf 기능이 무시된다
+            .apply(authorizationServerConfigurer); // OAuth2AuthorizationServerConfigurer 를 설정 초기화 클래스로 등록한다
+    }
+}
+```
+
+- OpenID Connect 1.0 UserInfo 엔드포인트 및 OpenID Connect 1.0 클라이언트 등록 엔드포인트를 사용하기 위해서 필수요소인 JwtDecoder 를 정의해야 한다
+```java
+@Bean
+public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
+	return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
+}
+```
+
+### ✓ OAuth2 인가 서버 구성 방식
+
+<b>1. @Import(OAuth2AuthorizationServerConfiguration.class) 선언</b>
+
+```java
+@Configuration
+@Import(OAuth2AuthorizationServerConfiguration.class)
+public class AuthorizationServerConfig {
+
+	@Bean
+	public RegisteredClientRepository registeredClientRepository() {
+		List<RegisteredClient> registrations = ...
+		
+		return new InMemoryRegisteredClientRepository(registrations);
+	}
+	
+	@Bean
+	public JWKSource<SecurityContext> jwkSource() {
+		RSAKey rsaKey = ...
+		JWKSet jwkSet = new JWKSet(rsaKey);
+		
+		return (jwkSelector, securityContext) -> jwkSelector.select(jwkSet);
+	}
+	
+}
+```
+
+<b>2. OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(HttpSecurity) 호출</b>
+
+```java
+@Configuration(proxyBeanMethods = false)
+public class AuthorizationServerConfig {
+
+	@Bean
+	@Order(Ordered.HIGHEST_PRECEDENCE)
+	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+		OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+```
+
+<b>3. 사용자 정의 구성</b>
+
+- OAuth2AuthorizationServerConfigurer는 OAuth2 인증 서버의 보안 구성을 완전히 사용자 정의할 수 있는 기능을 제공한다
+- 이를 통해 RegisteredClientRepository, OAuth2AuthorizationService, OAuth2TokenGenerator 등과 같이 핵심 구성 요소를 지정할 수 있다.
+- 또한 권한 부여 엔드포인트, 토큰 엔드포인트, 토큰 검사 엔드포인트 등과 같은 프로토콜 엔드포인트에 대한 요청 처리 논리를 사용자 정의할 수 있다.
+- OAuth2 Authorization ServerConfigurer는 다음과 같은 구성 옵션을 제공한다.
+```java
+@Configuration
+public class AuthorizationServerConfig {
+
+	@Bean
+	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+		
+		OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer<>();
+		http.apply(authorizationServerConfigurer);
+		
+		authorizationServerConfigurer
+			.registeredClientRepository(registeredClientRepository)
+			.authorizationService(authorizationService)
+			.authorizationConsentService(authorizationConsentService)
+			.providerSettings(providerSettings)
+			.tokenGenerator(tokenGenerator)
+			.clientAuthentication(clientAuthentication -> { })
+			.authorizationEndpoint(authorizationEndpoint -> { })
+			.tokenEndpoint(tokenEndpoint -> { })
+			.tokenIntrospectionEndpoint(tokenIntrospectionEndpoint -> { })
+			.tokenRevocationEndpoint(tokenRevocationEndpoint -> { })
+			.oidc(oidc -> oidc
+				.userInfoEndpoint(userInfoEndpoint -> { })
+				.clientRegistrationEndpoint(clientRegistrationEndpoint -> { })
+			);
+			
+		return http.build();
+	}
+	
+}
+```
+
+## 2-2. OAuth2AuthorizationServerConfigurer
+
+### ✓ OAuth2AuthorizationServerConfigurer
+
+- OAuth 2.0 Authorization Server 지원을 위한 설정 클래스로서 사양에 따른 엔드포인트 설정, 필터, 프로바이더 등의 초기화 작업이 이루어진다.
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000041.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000042.png`} />
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000043.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000044.png`} />
+
+## 2-3. ProviderContext (0.4.x 이후:  ▶️ AuthorizationServerContext))
+
+### ✓ ProviderContext (▶️ AuthorizationServerContext))
+
+- 공급자에 대한 정보를 저장하는 컨텍스트 객체로서 공급자 설정 및 현재 issuer 대한 액세스를 제공한다
+
+### ✓ ProviderContextHolder (▶️ AuthorizationServerContextHolder)
+
+- ProviderContext 를 가지고 있으며 ThreadLocal 을 사용하여 현재 요청 스레드와 연결되어 있는 ProviderContext 를 접근할 수 있게 한다
+
+### ✓ ProviderContextFilter (▶️ AuthorizationServerContextFilter))
+
+- ProviderContextHolder와 ProviderContext를 연결한다
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000045.png`} />
+
+# 3. AuthenticationEntryPoint
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000046.png`} />
+
+# 4. 시작하기
+
+## ✓ 개요
+
+- OAuth 2.0 Authorization Server 의 권한 부여 흐름에 대한 이해를 돕기 위해 간단한 어플리케이션을 만든다.
+- 클라이언트는 Postman 을 사용하고 인가서버의 엔드포인트로 권한부여 요청 및 응답을 확인한다
+
+## ✓ AuthorizationServerConfig 생성
+
+- OAuth 2.0 Authorization Server 지원을 위한 설정 클래스로서 엔드포인트와 인증을 위한 시큐리티 필터체인을 구성한다
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000047.png`} />
+
+## ✓ SecurityConfig 생성
+
+- 인가서버가 클라이언트에게 권한 부여를 하기 위해서는 리소스 소유자의 인증이 필요하기 때문에 사용자 인증 메커니즘을 구성해야 한다
+- OAuth 2.0 Authorization Server 로 접속하는 모든 요청에 대해 인증 & 인가 정책를 설정하는 클래스
+- 기본 사용자 계정을 생성한다
+```java
+@EnableWebSecurity
+public class DefaultSecurityConfig {
+
+	@Bean
+	SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+		http
+			.authorizeRequests(authorizeRequests ->
+				authorizeRequests.anyRequest().authenticated() // 사용자의 모든 요청은 인증을 받아야 자원 접근이 가능하다
+			)
+			.formLogin(withDefaults()); // 인증은 폼 인증 방식으로 설정한다
+			
+		return http.build();
+	}
+	
+	@Bean
+	UserDetailsService users() {
+		UserDetails user = User.builder()
+			.username("user")
+			.password("pass")
+			.roles("USER")
+			.build();
+			
+		return new InMemoryUserDetailsManager(user);
+	}
+	
+}
+```
+
+## ✓ 클라이언트 구성
+
+- 클라이언트 요청은 OAuth 2.0 Authorization Code Grant 타입으로 한다
+- OpenID Connect 가 실행되도록 scope 에 openid 가 포함되도록 한다
+- 클라이언트 인증 방법은 Basic 으로 한다
+- 클라이언트 RedirectUri 는 http://127.0.0.1:8080 로 한다
