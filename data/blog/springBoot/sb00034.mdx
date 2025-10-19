@@ -1,0 +1,417 @@
+---
+title: '🛎️[스프링 시큐리티 OAuth2] Spring Authorization Server - 엔드포인트 프로토콜'
+date: 2025-10-19
+tags: ['springboot', 'spring-security', 'authorization-server']
+draft: false
+layout: PostSimple
+---
+
+# 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+# 1. OAuth 2.0 AuthorizationServer Endpoint
+
+## 1-1. 기능 및 특징
+
+### ✓ OAuth2AuthorizationEndpointConfigurer
+
+- OAuth2 권한 부여 엔드포인트에 대한 사용자 정의 할 수 있는 기능을 제공한다.
+- OAuth2 권한 부여 요청에 대한 전처리, 기본 처리 및 후처리 로직을 커스텀하게 구현할 수 있도록 API를 지원한다
+- OAuth2AuthorizationEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+
+### ✓ OAuth2AuthorizationEndpointFilter
+
+- OAuth2 인증 요청(및 동의)을 처리하는 필터이며 다음과 같은 기본값으로 구성된다
+- **OAuth2AuthorizationCodeRequestAuthenticationConverter** – 클라이언트 요청 파라미터를 OAuth2AuthorizationCodeRequestAuthenticationToken 으로 변환하고 AuthenticationProvider 에게 전달한다
+- **OAuth2AuthorizationCodeRequestAuthenticationProvider**
+  - Authorization Code 권한 부여 방식을 처리하는 OAuth 2.0 인증 요청 및 동의에 대한 AuthenticationProvider 구현체이다
+
+### ✓ RequestMatcher
+
+- **Code 요청 패턴**
+  - /oauth2/authorize, GET, /oauth2/authorize, POST
+- **Consent (동의하기) 요청 패턴**
+  - /oauth2/authorize, POST
+
+### ✓ 사용자 정의 기능
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	
+	authorizationServerConfigurer
+		.authorizationEndpoint(authorizationEndpoint ->
+			authorizationEndpoint
+				.authorizationRequestConverter(authorizationRequestConverter)
+				.authenticationProvider(authenticationProvider)
+				.authorizationResponseHandler(authorizationResponseHandler)
+				.errorResponseHandler(errorResponseHandler)
+				.consentPage("/oauth2/v1/authorize")	// 권한 부여 요청 흐름 중에 승인이 필요한 경우 리소스 소유자를 리다이렉션하는 사용자 지정 동의 페이지의 URI
+		);
+		
+	return http.build();
+}
+```
+
+## 1-2. Endpoint Flow & 아키텍처
+
+### 1-2-1. 개요
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000053.png`} />
+
+### 1-2-2. 인증 전 단계
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000054.png`} />
+
+### 1-2-3. 인증 및 동의(Consent) 단계
+
+**✓ OAuth2AuthorizationConsent**
+
+- OAuth2AuthorizationConsent 는 OAuth2 권한 부여 요청 흐름의 권한부여"동의“ (결정)를 나타낸다.
+- 클라이언트에 대한 액세스를 승인할 때 리소스 소유자는 클라이언트가 요청한 권한의 하위 집합만 허용할 수 있습니다.
+- 클라이언트가 범위를 요청하고 리소스 소유자가 요청된 범위에 대한 액세스를 허용하거나 거부하는 authorization_code grant 흐름이다
+- OAuth2 인증 요청 흐름이 완료되면 OAuth2 Authorization Consent가 생성(또는 업데이트)되고 부여된 권한을 클라이언트 및 리소스 소유자와 연결한다.
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000055.png`} />
+
+**✓ OAuth2AuthorizationConsentService**
+
+- OAuth2AuthorizationConsent 저장되고 기존 OAuth2AuthorizationConsent 를 조회하는 클래스로 주로 OAuth2 권한 부여 요청 흐름을 구현하는 구성 요소에 의해 사용된다
+- 기본 구현체는 InMemoryOAuth2AuthorizationConsentService 와 JdbcOAuth2AuthorizationConsentService 가 있다
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000056.png`} />
+
+**✓ Resource owner 인증 및 Scope 동의 단계- 1**
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000057.png`} />
+
+**✓ Resource owner 인증 및 Scope 동의 단계- 2**
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000058.png`} />
+
+---
+
+# 2. OAuth 2.0 Token Endpoint
+
+## 2-1. 기능 및 특징
+
+### ✓ OAuth2TokenEndpointConfigurer
+
+- OAuth2 토큰 엔드포인트에 대한 사용자 정의 할 수 있는 기능을 제공한다.
+- OAuth2 토큰 요청에 대한 전처리, 기본 처리 및 후처리 로직을 커스텀하게 구현할 수 있도록 API를 지원한다
+- OAuth2TokenEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+- 지원되는 권한 부여 유형은 authorization_code, refresh_token 및 client_credential 이다
+
+### ✓ OAuth2TokenEndpointFilter
+
+- 클라이언트의 토큰 요청을 처리하는 필터이며 다음과 같은 기본값으로 구성된다
+- **DelegatingAuthenticationConverter** – 각 특정 유형의 AuthenticationConverter 를 호출해서 처리를 위임한다
+  - OAuth2AuthorizationCodeAuthenticationConverter – HttpServletRequest 정보를 OAuth2AuthorizationCodeAuthenticationToken 로 변환하여 반환
+  - OAuth2RefreshTokenAuthenticationConverter - HttpServletRequest 정보를 OAuth2RefreshTokenAuthenticationToken 로 변환하여 반환
+  - OAuth2ClientCredentialsAuthenticationConverter - HttpServletRequest 정보를 OAuth2ClientCredentialsAuthenticationToken 로 변환하여 반환
+- **OAuth2AuthorizationCodeAuthenticationProvider, OAuth2RefreshTokenAuthenticationProvider, OAuth2ClientCredentialsAuthenticationProvider**
+  - 권한 부여 유형에 따라 토큰을 발행하는 AuthenticationProvider 구현체이다
+- **AuthenticationSuccessHandler** - 인증된 OAuth2AccessTokenAuthenticationToken 을 처리하는 내부 구현체로서 인증토큰을 사용하여 OAuth2AccessTokenResponse 를 반환한다.
+- **AuthenticationFailureHandler** - OAuth2AuthenticationException 과 관련된 OAuth2Error를 사용하는 내부 구현 인증예외이며 OAuth2Error 응답을 반환한다.
+
+### ✓ RequestMatcher
+
+- **토큰 요청 패턴**
+  - /oauth2/token, POST
+
+### ✓ 사용자 정의 기능
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	
+	authorizationServerConfigurer
+		.tokenEndpoint(tokenEndpoint ->
+			tokenEndpoint
+				.accessTokenRequestConverter(accessTokenRequestConverter)
+				.authenticationProvider(authenticationProvider)
+				.accessTokenResponseHandler(accessTokenResponseHandler)
+				.errorResponseHandler(errorResponseHandler)
+		);
+	
+	return http.build();
+}
+```
+
+## 2-2. Flow & 아키텍처
+
+### 2-2-1. 클라이언트 인증하기
+
+**✓ OAuth2ClientAuthenticationConfigurer**
+
+- OAuth2 클라이언트 인증을 위한 사용자 정의하는 기능을 제공한다.
+- 클라이언트 인증 요청에 대한 전처리, 기본 처리 및 후처리 로직을 커스텀하게 구현할 수 있도록 API를 지원한다
+- OAuth2ClientAuthenticationFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+- 지원되는 클라이언트 인증 방법은 client_secret_basic, client_secret_post, private_key_jwt, client_secret_jwt및 none(공개 클라이언트) 이다
+
+**✓ OAuth2ClientAuthenticationFilter**
+
+- 클라이언트 인증 요청을 처리하는 필터이며 다음과 같은 기본값으로 구성된다
+- **DelegatingAuthenticationConverter**
+  - ClientSecretBasicAuthenticationConverter – 클라이언트 요청 방식이 HTTP Basic 일 경우 처리
+  - ClientSecretPostAuthenticationConverter – 클라이언트 요청 방식이 POST 일 경우 처리
+  - JwtClientAssertionAuthenticationConverter - 클라이언트 요청 방식이 JWT 토큰일 경우 처리
+  - PublicClientAuthenticationConverter - 클라이언트 요청 방식이 PKCE 일 경우 처리
+- **DelegatingAuthenticationProvider**
+  - ClientSecretAuthenticationProvider, JwtClientAssertionAuthenticationProvider, PublicClientAuthenticationProvider
+  - 권한 부여 유형에 따라 토큰을 발행하는 AuthenticationProvider 구현체이다
+- AuthenticationSuccessHandler - 인증된 OAuth2ClientAuthenticationToken 에 SecurityContext 를 연결하는 내부 구현체
+- AuthenticationFailureHandler – 연결된 OAuth2AuthenticationException 를 사용하여 OAuth2 오류 응답을 반환하는 내부 구현체
+
+**✓ RequestMatcher**
+
+- **토큰 요청 패턴**
+  - POST /oauth2/token, POST /oauth2/introspect, POST /oauth2/revoke
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000059.png`} />
+
+**✓ 사용자 정의 기능**
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	
+	authorizationServerConfigurer
+		.clientAuthentication(clientAuthentication ->
+			clientAuthentication.authenticationConverter(authenticationConverter)
+				.authenticationProvider(authenticationProvider)
+				.authenticationSuccessHandler(authenticationSuccessHandler)
+				.errorResponseHandler(errorResponseHandler)
+		);
+	
+	return http.build();
+}
+```
+
+### 2-2-2. Authorization Code Grant Type
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000060.png`} />
+
+**✓ Access Token Response**
+
+- **Successful Response**
+  - access_token(<span style={{color: 'red'}}>필수</span>) - 권한 부여 서버에서 발급한 액세스 토큰 문자열
+  - token_type(<span style={{color: 'red'}}>필수</span>) - 토큰 유형은 일반적으로 "Bearer" 문자열
+  - expires_in(<span style={{color: 'blue'}}>권장</span>) – 토큰의 만료시간
+  - refresh_token(선택 사항) - 액세스 토큰이 만료되면 응용 프로그램이 다른 액세스 토큰을 얻는 데 사용할 수 있는 Refresh 토큰을 반환하는 것이 유용하다.
+    - 단, implicit 권한 부여로 발행된 토큰은 새로고침 토큰을 발행할 수 없다.
+  - scope(선택사항) - 사용자가 부여한 범위가 앱이 요청한 범위와 동일한 경우 이 매개변수는 선택사항.
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000061.png`} />
+- **Unsuccessful Response**
+  - invalid_request - 요청에 매개변수가 누락, 지원되지 않는 매개변수, 매개변수 반복되는 경우 서버가 요청을 진행할 수 없음
+  - invalid_client - 요청에 잘못된 클라이언트 ID 또는 암호가 포함된 경우 클라이언트 인증에 실패, <span style={{color: 'blue'}}>HTTP 401 응답</span>
+  - invalid_grant - 인증 코드가 유효하지 않거나 만료됨
+    - 권한 부여에 제공된 리디렉션 URL이 액세스 토큰 요청에 제공된 URL과 일치하지 않는 경우 반환하는 오류
+  - invalid_scope - 범위를 포함하는 액세스 토큰 요청의 경우 이 오류는 요청의 유효하지 않은 범위 값을 나타냄
+  - unauthorized_client - 이 클라이언트는 요청된 권한 부여 유형을 사용할 권한이 없음(RegisteredClient 에 정의하지 않은 권한 부여 유형을 요청한 경우)
+  - unsupported_grant_type - 권한 부여 서버가 인식하지 못하는 승인 유형을 요청하는 경우 이 코드를 사용함
+  <img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000062.png`} />
+
+### 2-2-3. Client Credentials Grant Type
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000063.png`} />
+
+### 2-2-4. Refresh Token Flow
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000064.png`} />
+
+### 2-2-5. Authorization Code with PKCE Grant Type
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000065.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000066.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000067.png`} />
+
+---
+
+# 3. OAuth 2.0 Token Introspection Endpoint
+
+## ✓ OAuth2TokenIntrospectionEndpointConfigurer
+
+- OAuth2 토큰 검사 엔드포인트에 대한 사용자 정의 할 수 있는 기능을 제공한다.
+- OAuth2 검사 요청에 대한 전처리, 기본 처리 및 후처리 로직을 커스텀하게 구현할 수 있도록 API를 지원한다
+- OAuth2TokenIntrospectionEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+
+## ✓ OAuth2TokenIntrospectionEndpointFilter
+
+- OAuth2 검사 요청을 처리하는 필터이며 다음과 같은 기본값으로 구성된다
+- **IntrospectionRequestConverter**
+  - OAuth2 검사 요청을 추출하려고 할 때 사용되는 전처리기로서 OAuth2TokenIntrospectionAuthenticationToken 을 반환한다
+- **OAuth2TokenIntrospectionAuthenticationProvider**
+  - OAuth2TokenIntrospectionAuthenticationToken 를 받아 인증 처리를 하는 AuthenticationProvider 구현체이다
+
+## ✓ RequestMatcher
+
+- **토큰 검사 요청 패턴**
+  - /oauth2/introspect, POST
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000068.png`} />
+
+## ✓ 사용자 정의 기능
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	
+	authorizationServerConfigurer
+		.tokenIntrospectionEndpoint(tokenIntrospectionEndpoint ->
+			tokenIntrospectionEndpoint
+				.introspectionRequestConverter(introspectionRequestConverter)
+				.authenticationProvider(authenticationProvider)
+				.introspectionResponseHandler(introspectionResponseHandler)
+				.errorResponseHandler(errorResponseHandler)
+		);
+	
+	return http.build();
+}
+```
+
+# 4. OAuth 2.0 Token Revocation Endpoint
+
+## ✓ OAuth2TokenRevocationEndpointConfigurer
+
+- OAuth2 토큰 취소 엔드포인트에 대한 사용자 정의 할 수 있는 기능을 제공한다.
+- OAuth2 토큰 취소에 대한 전처리, 기본 처리 및 후처리 로직을 커스텀하게 구현할 수 있도록 API를 지원한다
+- OAuth2TokenRevocationEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+
+## ✓ OAuth2TokenRevocationEndpointFilter
+
+- OAuth2 토큰 취소를 처리하는 필터이며 다음과 같은 기본값으로 구성된다
+- **DefaultTokenRevocationAuthenticationConverter**
+  - OAuth2 토큰 취소를 추출하려고 할 때 사용되는 전처리기로서 OAuth2TokenRevocationAuthenticationToken 을 반환한다
+- **OAuth2TokenRevocationAuthenticationProvider**
+  - OAuth2TokenRevocationAuthenticationToken 을 전달받아 인증처리를 하는 AuthenticationProvider 구현체이다.
+
+## ✓ RequestMatcher
+
+- **토큰 취소 요청 패턴**
+  - /oauth2/revoke, POST
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000069.png`} />
+
+## ✓ 사용자 정의 기능
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	
+	authorizationServerConfigurer
+		.tokenRevocationEndpoint(tokenRevocationEndpoint ->
+			tokenRevocationEndpoint
+				.revocationRequestConverter(revocationRequestConverter)
+				.authenticationProvider(authenticationProvider)
+				.revocationResponseHandler(revocationResponseHandler)
+				.errorResponseHandler(errorResponseHandler)
+		);
+	
+	return http.build();
+}
+```
+
+# 5. OAuth 2.0 Authorization Server Metadata Endpoint
+
+## ✓ OAuth2AuthorizationServerConfigurer
+
+- OAuth2 Authorization Server 메타데이터 엔드포인트 대한 지원을 제공한다.
+- OAuth2AuthorizationServerMetadataEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+- OAuth2 Authorization Server 메타데이터 요청을 처리하고 OAuth2 Authorization Server 메타데이터 응답을 반환한다
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000070.png`} />
+
+## ✓ RequestMatcher
+
+- **토큰 검사 요청 패턴**
+  - /.well-known/oauth-authorization-server, GET
+
+# 6. JWK Set Endpoint
+
+## ✓ OAuth2AuthorizationServerConfigurer
+
+- JWK Set 엔드포인트 대한 지원을 제공한다.
+- NimbusJwkSetEndpointFilter 를 구성하고 이를 SecurityFilterChain 빈에 등록한다
+- NimbusJwkSetEndpointFilter 는 JWK Set 을 반환하는 필터입니다.
+- JWK Set 엔드포인트는 JWKSource\<SecurityContext\> 빈이 등록된 경우에만 구성됩니다
+
+## ✓ RequestMatcher
+
+- **토큰 검사 요청 패턴**
+  - /oauth2/jwks, GET
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000071.png`} />
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000072.png`} />
+
+# 7. OpenID Connect 1.0 Endpoint
+
+## ✓ OpenID Connect 1.0 Provider Configuration Endpoint
+
+- OidcConfigurer 는 OpenID Connect 1.0 Provider Configuration 엔드포인트 대한 지원을 제공한다.
+- OidcConfigurer 는 OidcProviderConfigurationEndpointFilter 를 구성하고 이를 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+- OidcProviderConfigurationEndpointFilter 는 OidcProviderConfiguration 응답을 처리한다
+
+## ✓ OpenID Connect 1.0 UserInfo Endpoint
+
+- OidcUserInfoEndpointConfigurer 는 OpenID Connect 1.0 UserInfo 엔드포인트 사용자 정의하는 기능을 제공한다
+- OidcUserInfoEndpointFilter를 구성하고 OAuth2 인증 서버 SecurityFilterChain 빈에 등록한다
+
+## ✓ OidcUserInfoEndpointFilter
+
+- UserInfo 요청을 처리하고 OidcUserInfo 응답을 반환하는 필터이며 다음과 같은 기본값으로 구성된다
+- **OidcUserInfoAuthenticationProvider**
+  - 요청된 scope 를 기준으로 ID 토큰에서 표준 클레임을 추출하는 userInfoMapper 을 가지고 있다
+
+## ✓ RequestMatcher
+
+- **토큰 검사 요청 패턴**
+  - /userinfo, POST
+  - /userinfo, GET
+
+## ✓ UserInfo 엔드포인트 접근 조건
+
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000073.png`} />
+- UserInfo 엔드포인트 프로토콜은 기본적으로 인증을 받은 상태에서만 접근이 가능한다. 왜냐하면 FilterSecurityInteceptor 클래스 이후에 위치하고 있기 때문이다
+- UserInfo 엔드포인트 요청시 일반적으로 로그인 과정을 거치기 때문에 정상적으로 access token 발급이 가능하다
+- /userinfo 엔드포인트는 권한부여흐름 요청에서 받은 access token 을 가지고 인가서버로 요청하기 때문에 별도의 인증과정을 거치도록 구성되어져야 한다
+
+## ✓ UserInfo 엔드 포인트 보호 자원 구성
+
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
+	...
+	
+	http.oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt);
+	
+	return http.build();
+}
+
+@Bean
+public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
+	return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
+}
+```
+
+- http.oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt) 구성을 통해 토큰에 대한 인증과정을 거치도록 한다
+- UserInfo 리소스는 FilterSecurityInterceptor 에서 권한이 허가된 이후 접근이 가능하도록 위치해 있다.
+- OpenID Connect 1.0 UserInfo 엔드포인트에는 토큰을 디코딩하고 검증하기 위한 JwtDecoder 빈이 필요하다
+<img src={`${process.env.BASE_PATH}/static/images/springBoot/image00000074.png`} />
