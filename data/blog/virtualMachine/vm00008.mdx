@@ -1,0 +1,202 @@
+---
+title: '🚀 EC2 1대 + k3s로 OAuth 연습 앱 배포하기 (nip.io)'
+date: 2026-06-02
+tags: ['aws', 'ec2', 'k3s', 'kubernetes', 'docker', 'ecr', 'oauth2']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+> Spring Security OAuth2 3-tier 앱을 AWS EC2 1대에 k3s로 올려본 기록입니다.<br/>
+> EKS는 비용 때문에 패스, 도메인은 나중에 — **nip.io**로 먼저 띄워봤습니다.<br/>
+> ⚠️ 아래 IP·계정 ID는 **예시/마스킹 값**입니다.
+
+## 1. 프로젝트 구성
+
+| Repo | 역할 |
+|------|------|
+| react-note | React/Vite 프론트 |
+| react-note-api | BFF + JWT Resource Server |
+| spring-authorization-server | Auth Server (JWT 발급) |
+| react-note-deploy | k8s manifest (GitOps) |
+
+**로그인 흐름 (로컬 로그인)**
+
+1. 프론트 `/login` 폼 → `POST /api/auth/login`
+2. API가 Auth Server로 프록시 → JWT `access_token` 발급
+3. `sessionStorage` 저장 → 이후 `Authorization: Bearer`로 API 호출
+
+SNS OAuth(PKCE)는 코드만 준비해 두고, 버튼은 아직 disabled 상태입니다.
+
+## 2. 목표 아키텍처
+
+```
+[브라우저]
+    │  http://app.{EC2_IP}.nip.io
+    ▼
+[k3s Traefik Ingress]
+    ├── app.*  → react-note (nginx)
+    ├── api.*  → react-note-api
+    └── auth.* → auth-server
+         ▲
+[ECR] ← 맥에서 docker build & push
+```
+
+도메인 없이 **nip.io**를 썼습니다.<br/>
+`app.{EC2_IP}.nip.io` → 해당 퍼블릭 IP로 자동 resolve됩니다.
+
+## 3. 인프라 스펙
+
+| 항목 | 선택 |
+|------|------|
+| EC2 | t3.large (8GB) |
+| OS | Ubuntu 24.04 LTS |
+| 리전 | ap-southeast-2 |
+| K8s | k3s (single-node) |
+| 이미지 | ECR 3개 |
+| IAM | EC2 role (ECR ReadOnly) |
+
+보안 그룹: **22, 80, 443**
+
+## 4. EC2 + k3s 설치
+
+```bash
+curl -sfL https://get.k3s.io | sh -
+sudo k3s kubectl get nodes   # Ready 확인
+```
+
+## 5. ECR + Docker 이미지
+
+ECR 저장소 3개 생성: `react-note`, `react-note-api`, `auth-server`
+
+맥(Apple Silicon) → EC2(x86) 배포 시 **`--platform linux/amd64`** 필수.
+
+```bash
+export ECR=123456789012.dkr.ecr.ap-southeast-2.amazonaws.com
+
+aws ecr get-login-password --region ap-southeast-2 | \
+  docker login --username AWS --password-stdin $ECR
+
+# 프론트 — 지금은 VITE_BASE_API_URL만 넘기면 됨
+docker build --platform linux/amd64 \
+  --build-arg VITE_BASE_API_URL=http://api.{EC2_IP}.nip.io \
+  -t $ECR/react-note:latest \
+  /path/to/react-note
+
+docker push $ECR/react-note:latest
+
+# react-note-api, auth-server도 동일
+docker build --platform linux/amd64 \
+  -t $ECR/react-note-api:latest \
+  /path/to/react-note-api
+
+docker push $ECR/react-note-api:latest
+```
+
+> 맥에서 ECR push 시 IAM **사용자** Access Key + `aws configure` 필요 (EC2 role과 별개)
+
+## 6. k8s manifest 적용
+
+`react-note-deploy/k8s/`에서 ECR 주소·nip.io host를 맞춘 뒤:
+
+```bash
+scp -r k8s/ ubuntu@{EC2_IP}:~
+sudo k3s kubectl apply -f ~/k8s/namespace.yaml
+sudo k3s kubectl apply -f ~/k8s/
+sudo k3s kubectl get pods -n note -w
+```
+
+## 7. 삽질 기록 (트러블슈팅)
+
+### 7-1. ImagePullBackOff — ECR 인증
+
+IAM role을 EC2에 붙였는데도 pull이 안 됐다.
+
+```
+authorization failed: no basic auth credentials
+```
+
+**원인:** k3s는 EKS처럼 IAM role만으로 ECR pull이 **자동 되지 않음**
+
+**해결:** `/etc/rancher/k3s/registries.yaml` + k3s restart
+
+```bash
+# Ubuntu 24.04: apt awscli 불가 → AWS CLI v2 공식 설치
+TOKEN=$(aws ecr get-login-password --region ap-southeast-2)
+sudo tee /etc/rancher/k3s/registries.yaml <<EOF
+configs:
+  "123456789012.dkr.ecr.ap-southeast-2.amazonaws.com":
+    auth:
+      username: AWS
+      password: ${TOKEN}
+EOF
+sudo systemctl restart k3s
+sudo k3s kubectl delete pods -n note --all
+```
+
+> ECR 토큰은 12시간마다 만료 → 운영에선 cron 갱신 필요
+
+### 7-2. IAM role curl이 빈 값
+
+Ubuntu 24.04는 **IMDSv2**만 허용. metadata token 없이 curl하면 role이 없는 것처럼 보인다.
+
+```bash
+TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+
+curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/iam/security-credentials/
+```
+
+### 7-3. API CrashLoopBackOff — YAML duplicate key
+
+`application-k8s.yml`에 `spring:` 키가 **두 번** 있어서 Spring Boot가 시작 전 crash.
+
+```
+DuplicateKeyException: found duplicate key spring
+```
+
+`spring:` 블록을 하나로 merge → API 이미지 재빌드·push → 해결.
+
+### 7-4. Mac docker build 실패
+
+```
+no match for platform in manifest: not found
+```
+
+`eclipse-temurin:17-jdk-alpine` 이미지 + Apple Silicon 조합 문제.
+
+```bash
+docker build --platform linux/amd64 ...
+```
+
+## 8. 결과
+
+| 서비스 | URL (예시) |
+|--------|-----|
+| 프론트 | http://app.{EC2_IP}.nip.io |
+| API | http://api.{EC2_IP}.nip.io |
+| Auth | http://auth.{EC2_IP}.nip.io/authorization-api |
+
+학습용 테스트 계정으로 로그인 확인 ✅
+
+## 9. 배운 것
+
+1. **도메인은 나중에 해도 된다** — nip.io + Ingress host로 IP 배포 가능
+2. **Mac → EC2는 amd64 빌드** — `--platform linux/amd64`
+3. **k3s + ECR = registries.yaml** — IAM role ≠ 자동 pull
+4. **k8s profile YAML도 검증** — duplicate key면 Pod만 Running처럼 보이다 crash
+5. **EC2 role ≠ 맥 aws configure** — push는 IAM 사용자, pull은 instance role
+6. **블로그엔 IP·계정 ID 마스킹** — 공개 글에는 placeholder 사용
+
+## 10. 다음에 할 것
+
+- Route53 도메인 + HTTPS (Let's Encrypt)
+- Argo CD GitOps
+- Jenkins CI → ECR push 자동화
+- SNS OAuth redirect URI 등록
