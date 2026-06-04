@@ -1,0 +1,237 @@
+---
+title: '🔄 EC2 k3s에 Argo CD GitOps 붙이기 (nip.io HTTPS)'
+date: 2026-06-04
+tags: ['aws', 'ec2', 'k3s', 'kubernetes', 'argocd', 'gitops', 'cert-manager', 'https']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+> [이전 글](/blog/virtualMachine/vm00008)에서 EC2 1대 + k3s로 3-tier 앱을 nip.io로 띄운 뒤,<br/>
+> **HTTPS → Argo CD → Git push만으로 manifest 배포**까지 붙인 기록입니다.<br/>
+> ⚠️ IP·ECR 계정·SSH 키·GitHub URL은 **예시/플레이스홀더**입니다. 실제 값은 로컬 메모에만 둡니다.
+
+## 1. 전제 (이미 되어 있던 것)
+
+| 항목 | 상태 |
+|------|------|
+| k3s + `note` namespace | ✅ |
+| ECR 3이미지 + `registries.yaml` | ✅ |
+| Ingress + **cert-manager** + Let's Encrypt prod | ✅ `note-tls` |
+| GitOps repo `react-note-deploy` / `k8s/` | ✅ GitHub push |
+
+접속 URL 패턴 (예시):
+
+| 서비스 | URL |
+|--------|-----|
+| 프론트 | `https://app.{EC2_IP}.nip.io` |
+| API | `https://api.{EC2_IP}.nip.io` |
+| Auth | `https://auth.{EC2_IP}.nip.io/authorization-api` |
+
+프론트는 **`VITE_BASE_API_URL=https://api.{EC2_IP}.nip.io`** 로 **재빌드**해야 Mixed Content가 안 난다.
+
+## 2. Argo CD가 하는 일
+
+**한 줄:** 배포 전용 Git의 `k8s/` 를 클러스터에 맞춰 자동 반영.
+
+| 도구 | 역할 |
+|------|------|
+| **Argo CD** | CD — manifest watch → sync |
+| **react-note-deploy** | manifest 저장소 (source of truth) |
+| **Jenkins** (다음) | CI — 앱 repo push → ECR → manifest image 태그 bump |
+
+앱 소스 repo 3개를 Argo에 직접 붙이지 않고, **deploy repo 1개 + Argo Application 1개**가 일반적인 GitOps 패턴이다.
+
+## 3. 목표 아키텍처
+
+```
+[개발자]
+    │  git push (react-note-deploy/k8s/)
+    ▼
+[GitHub]
+    ▼
+[Argo CD — Application note-app 1개]
+    │  path: k8s/
+    ▼
+[k3s namespace: note]
+    ├── react-note
+    ├── react-note-api
+    └── auth-server
+```
+
+**나중에 (Jenkins Pod):**
+
+```
+react-note / api / auth-server  각 repo push
+    → Jenkins job (×3) → ECR
+    → deploy repo 해당 yaml image 태그만 commit
+    → Argo sync (note-app 그대로 1개)
+```
+
+## 4. Argo CD 설치
+
+```bash
+sudo k3s kubectl create namespace argocd
+sudo k3s kubectl apply -n argocd -f \
+  https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+sudo k3s kubectl wait --for=condition=Available \
+  deployment/argocd-server -n argocd --timeout=300s
+```
+
+초기 비밀번호:
+
+```bash
+sudo k3s kubectl get secret argocd-initial-admin-secret -n argocd \
+  -o jsonpath='{.data.password}' | base64 -d && echo
+```
+
+로그인: **admin** + 위 비밀번호
+
+## 5. UI 접속 — port-forward vs Ingress
+
+| | 방법 A (port-forward) | 방법 B (Ingress) ✅ |
+|--|----------------------|---------------------|
+| URL | `https://localhost:8300` + SSH `-L` | `https://argocd.{EC2_IP}.nip.io` |
+| 보안 그룹 | 8300 추가 | 80/443만 |
+| SSH 터널 | 필요 | **불필요** |
+
+### 방법 B (선택)
+
+Ingress에서 TLS 종료 → Argo는 **`server.insecure=true`** → Service **port 80** 으로 프록시.
+
+```bash
+sudo k3s kubectl patch configmap argocd-cmd-params-cm -n argocd --type merge \
+  -p '{"data":{"server.insecure":"true"}}'
+
+sudo k3s kubectl apply -f /home/ubuntu/argocd/argocd-ingress.yaml
+sudo k3s kubectl rollout restart deployment argocd-server -n argocd
+```
+
+`argocd-ingress.yaml` 은 **deploy repo의 `argocd/`** 에 두고, `note-app`이 sync하는 `k8s/` 와 **분리**했다. (Argo가 앱 manifest만 관리하게)
+
+맥 → EC2 복사 예시:
+
+```bash
+scp -i {SSH_KEY} -r /path/to/react-note-deploy/argocd ubuntu@{EC2_IP}:~
+```
+
+> `sudo bash` 실행 시 `$HOME`이 `/root`가 되어 `~/k8s` 를 못 찾는 경우가 있다.<br/>
+> → `/home/ubuntu/argocd/...` 처럼 **ubuntu 홈 풀 경로**를 쓰자.
+
+## 6. Application `note-app` 등록
+
+`argocd/application.yaml` (요지):
+
+```yaml
+spec:
+  source:
+    repoURL: https://github.com/{GITHUB_USER}/react-note-deploy.git
+    targetRevision: main
+    path: k8s
+  destination:
+    namespace: note
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+```bash
+sudo k3s kubectl apply -f /home/ubuntu/argocd/application.yaml
+```
+
+Argo UI → **note-app** → **Sync** → **Synced / Healthy**
+
+### manifest 정리 (push 전에)
+
+- **`k8s/ingress.yaml` 삭제** — HTTP-only Ingress가 HTTPS용 `ingress-https.yaml` 과 이름이 겹치면 Sync 시 TLS가 깨질 수 있음
+- 주석만 바꾼 commit → Argo **diff 없음** → Last Sync 안 바뀜 (정상)
+
+## 7. GitOps 동작 확인
+
+Deployment에 **실제로 바뀌는 필드**를 넣어야 한다 (예: annotation).
+
+```yaml
+metadata:
+  annotations:
+    gitops-test: "1"
+```
+
+```bash
+git add k8s/react-note.yaml
+git commit -m "gitops: test annotation"
+git push origin main
+```
+
+Argo UI: **Refresh** → **OutOfSync** → **Sync** (또는 automated 1~3분)
+
+```bash
+sudo k3s kubectl get deploy react-note -n note \
+  -o jsonpath='{.metadata.annotations.gitops-test}{"\n"}'
+# → 1
+```
+
+## 8. 삽질 기록
+
+### 8-1. `setup-argocd-ingress.sh` — path not found
+
+```
+error: the path "/root/k8s/argocd-ingress.yaml" does not exist
+```
+
+**원인:** `sudo` 로 스크립트 실행 시 `$HOME=/root`
+
+**해결:** `ARGOCD_DIR=/home/ubuntu/argocd` 또는 스크립트에서 `SUDO_USER` 홈 디렉터리 사용
+
+### 8-2. push 했는데 Last Sync 그대로
+
+**원인:** yaml **주석만** 수정 → Kubernetes spec 동일 → sync 할 일 없음
+
+**해결:** metadata/spec 변경. UI에서 **Refresh**와 **Sync** 구분 (Refresh만으론 Last Sync 안 바뀜)
+
+### 8-3. Argo UI 502
+
+**원인:** `server.insecure` 미설정, 또는 Ingress backend가 443
+
+**해결:** patch + backend **port 80**
+
+## 9. 결과
+
+| 항목 | URL (예시) |
+|------|------------|
+| Argo CD | `https://argocd.{EC2_IP}.nip.io` |
+| note-app | react-note / api / auth-server 3 Deployment |
+
+체크리스트:
+
+- [x] Argo CD 설치 + 방법 B Ingress
+- [x] `note-app` Synced
+- [x] Git push → Sync 검증
+- [ ] Jenkins Pod (repo push마다 CI → ECR → image 태그 bump)
+
+## 10. 배운 것
+
+1. **GitOps = deploy repo push + Argo 1앱** — 앱 repo push와는 별개 (CI가 GitOps를 갱신해 줘야 함)
+2. **Application 1개에 서비스 3개** — `k8s/` 아래 yaml 여러 개면 충분
+3. **manifest diff는 spec 기준** — 주석만으론 CD가 안 돈다
+4. **Argo 전용 manifest는 `argocd/` 분리** — `k8s/` 와 섞지 않기
+5. **공개 글에는 IP·계정·키 경로 마스킹** — `{EC2_IP}`, `{SSH_KEY}`
+
+## 11. 다음에 할 것
+
+- **Jenkins를 k3s Pod로** — job 3개 (react-note / api / auth-server)
+- Cloudflare + 실제 도메인
+- SNS OAuth + Auth Server `oauth2Login`
+
+---
+
+**참고 repo (로컬 경로 예시, 블로그에 실경로 공개 X)**
+
+- `react-note-deploy` — k8s + argocd/
+- `docs/ARGOCD.md` — 운영 치트시트
