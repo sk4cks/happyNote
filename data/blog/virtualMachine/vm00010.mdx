@@ -1,0 +1,252 @@
+---
+title: '🔧 EC2 k3s에 Jenkins CI 붙이기 — push하면 자동 빌드·배포'
+date: 2026-06-05
+tags: ['aws', 'ec2', 'k3s', 'kubernetes', 'jenkins', 'ci', 'ecr', 'github', 'webhook']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+> [이전 글](/blog/virtualMachine/vm00009)에서 **Argo CD(GitOps)** 까지 붙였습니다.<br/>
+> 이번엔 **Jenkins**로 "코드 push → Docker 이미지 → deploy repo 수정 → Argo가 Pod 교체"까지 자동화한 기록입니다.<br/>
+> ⚠️ IP·ECR·GitHub·SSH 키는 **예시/마스킹**입니다.
+
+## 1. CI와 CD — 먼저 용어부터
+
+처음 보면 헷갈리기 쉬운 부분만 정리합니다.
+
+| 용어 | 하는 일 | 비유 |
+|------|---------|------|
+| **CI** (Continuous Integration) | 코드 빌드, 테스트, **Docker 이미지 만들어 ECR에 올림** | 공장에서 제품 생산 |
+| **CD** (Continuous Delivery/Deployment) | **어떤 이미지를 k8s에 띄울지** manifest 반영 | 배송·설치 |
+| **Jenkins** | CI 담당 (이번 글) | 공장 기계 |
+| **Argo CD** | CD 담당 ([이전 글](/blog/virtualMachine/vm00009)) | 배송 관리자 |
+| **GitOps repo** (`react-note-deploy`) | k8s yaml만 모아 둔 repo | 배송 지시서 |
+
+**한 줄:** 개발자는 **앱 repo**에 push만 한다. Jenkins가 빌드하고, **deploy repo** yaml을 고치면, Argo가 알아서 Pod를 바꾼다.
+
+## 2. 전체 그림 (3개 앱 repo)
+
+```
+[개발자] git push
+    │
+    ├── react-note          ──┐
+    ├── react-note-api      ──┼── GitHub Webhook (즉시)
+    └── auth-server         ──┘
+                │
+                ▼
+         [Jenkins Pod]  ← k3s 안에서 동작
+                │
+                ├── Docker build & ECR push
+                └── react-note-deploy 의 k8s/*.yaml image 태그 수정 + git push
+                            │
+                            ▼
+                     [Argo CD note-app]
+                            │
+                            ▼
+                     [k3s note namespace — Pod 3개]
+```
+
+**Argo Application은 1개** (`note-app`)인데, 그 안에 프론트·API·Auth manifest가 **함께** 들어 있습니다. Jenkins Job은 **repo마다 3개**입니다.
+
+## 3. 왜 Jenkins를 Pod로 올렸나
+
+| 방식 | 설명 |
+|------|------|
+| EC2에 `apt install jenkins` | 호스트에 직접 설치 |
+| **k3s Pod** (이번 선택) | 앱·Argo와 같이 **클러스터 안**에서 관리 |
+
+학습 목적상 k3s 안에 넣었고, manifest는 Argo가 관리하는 `k8s/` **밖** `jenkins/k8s/` 에 두고 **수동 apply** 했습니다.
+
+## 4. 설치 순서 (요약)
+
+### 4-1. EC2 호스트에 Docker
+
+Jenkins Pod가 **호스트의 docker.sock** 을 빌려 씁니다. Pod 안에서 `docker build` 하려면 호스트에 Docker CE가 필요합니다.
+
+```bash
+sudo bash ~/scripts/install-docker-ec2.sh
+```
+
+### 4-2. Jenkins manifest apply
+
+```bash
+sudo bash ~/scripts/install-jenkins.sh
+```
+
+- UI: `https://jenkins.{EC2_IP}.nip.io`
+- 초기 비밀번호: Pod 안 `initialAdminPassword` 파일
+
+### 4-3. Jenkins UI 초기 설정
+
+1. Install suggested plugins
+2. 관리자 계정 생성
+3. Jenkins URL 확인 (`https://jenkins.{EC2_IP}.nip.io`)
+
+## 5. manifest 파일 읽는 법
+
+### 5-1. `namespace.yaml` — 방 이름표
+
+```yaml
+kind: Namespace
+metadata:
+  name: jenkins
+```
+
+k8s에서 리소스를 **`jenkins` 구역**에 모읍니다. `note`(앱)와 이름만 나눈 것이지, 네트워크 포트가 따로 막히는 건 아닙니다.
+
+### 5-2. `jenkins.yaml` — Jenkins 서버 4종 세트
+
+한 파일에 `---` 로 나뉜 4개 리소스입니다.
+
+**① PVC (저장소)**
+
+- Jenkins 설정·Job·플러그인·빌드 기록 → **10Gi** 디스크에 보관
+- Pod가 재시작해도 데이터 유지
+
+**② Deployment (실제 Jenkins 컨테이너)**
+
+| 설정 | 의미 |
+|------|------|
+| `image: jenkins/jenkins:lts-jdk17` | 공식 Jenkins 이미지 |
+| `containerPort: 8080` | **컨테이너 안** 웹 UI (브라우저는 Ingress 443 사용) |
+| `docker.sock` 마운트 | 호스트 Docker로 이미지 빌드 |
+| `privileged: true` | 학습용 — docker.sock 쓰기 위해 (운영에선 Kaniko 등 검토) |
+
+**③ Service**
+
+- 클러스터 안에서 `jenkins:8080` 으로 Pod에 연결
+
+**④ Ingress**
+
+- `jenkins.{EC2_IP}.nip.io` + Let's Encrypt
+- **GitHub Webhook**도 이 URL로 옵니다 (`/github-webhook/`)
+
+### 5-3. `Jenkinsfile` — 빌드 레시피 (앱 repo 루트)
+
+각 **앱 repo** 최상단에 둡니다. Jenkins Job이 Git에서 이 파일을 읽어 파이프라인을 실행합니다.
+
+```groovy
+pipeline {
+  agent any                    // Jenkins Pod에서 실행
+  options {
+    buildDiscarder(...)        // 빌드 이력 최신 1개만 (디스크 절약)
+  }
+  environment { ... }          // ECR 주소, GitOps repo URL 등
+  stages { ... }               // 단계별 작업
+}
+```
+
+**프론트(react-note) 단계**
+
+| Stage | 내용 |
+|-------|------|
+| Checkout | push된 소스 받기 |
+| Docker Build & Push | `docker build` → ECR (`linux/amd64`, API URL 빌드 인자) |
+| Update GitOps | deploy repo clone → yaml `image:` 태그 변경 → `git push` |
+
+**API·Auth** 는 Docker 전에 `./gradlew bootJar -x test` 로 JAR을 만듭니다.  
+`-x test` = **테스트 스킵** (지금은 빌드·배포만 빠르게 확인).
+
+**Update GitOps에서 중요한 점**
+
+- `git` step으로 deploy repo를 **clone**
+- `withCredentials` + PAT로 **`git push`** (안 하면 403 / Username prompt)
+
+## 6. Jenkins Job 3개
+
+| Job 이름 | Git repo (SCM) | 수정하는 yaml |
+|----------|----------------|---------------|
+| react-note-ci | `react-note` | `k8s/react-note.yaml` |
+| react-note-api-ci | `react-note-api` | `k8s/react-note-api.yaml` |
+| auth-server-ci | `spring-authorization-server` | `k8s/auth-server.yaml` |
+
+공통 설정:
+
+- Pipeline script **from SCM**
+- Branch: `*/main`
+- Script Path: `Jenkinsfile`
+- Trigger: **GitHub hook trigger** (아래 Webhook)
+
+**주의:** SCM URL은 **앱 repo**여야 합니다. `react-note-deploy` 는 Jenkinsfile이 없고, Argo만 봅니다.
+
+## 7. GitHub PAT & Credential
+
+deploy repo에 push하려면 Jenkins에 **GitHub PAT** 등록이 필요합니다.
+
+| 필드 | 값 |
+|------|-----|
+| Kind | Username with password |
+| Username | GitHub **아이디** (이메일 X) |
+| Password | PAT (`repo` 권한) |
+| ID | `github-gitops` (**공백 없이**) |
+
+## 8. IAM — ECR push 권한
+
+k3s Pod pull용 role(`ecr-read`)만 있으면 Jenkins **push**가 거절됩니다.
+
+```
+ecr:InitiateLayerUpload ... not authorized
+```
+
+→ EC2 IAM role에 **ECR push** 권한 추가 (예: `AmazonEC2ContainerRegistryPowerUser`).
+
+## 9. GitHub Webhook — push 즉시 빌드
+
+**Poll SCM** (`H/5 * * * *`) 은 5분마다 Git을 **들여다보는** 방식입니다.
+
+**Webhook** 은 push 순간 GitHub가 Jenkins에 **알려 주는** 방식이라 더 빠릅니다.
+
+**GitHub (repo 3개 각각)** → Settings → Webhooks:
+
+| 항목 | 값 |
+|------|-----|
+| Payload URL | `https://jenkins.{EC2_IP}.nip.io/github-webhook/` |
+| Events | Just the push event |
+
+**응답 확인:** Webhook → **Recent Deliveries** → **200**
+
+**Jenkins Job:** ✅ GitHub hook trigger / ❌ Poll SCM 끄기
+
+## 10. 디스크 절약
+
+EC2 용량이 작으면:
+
+- Job **오래된 빌드 삭제** → **보관할 최대갯수: 1**
+- 호스트: `sudo docker system prune -af` (안 쓰는 이미지 정리)
+
+## 11. 삽질 모음
+
+| 증상 | 원인 / 해결 |
+|------|-------------|
+| Jenkinsfile from deploy repo | SCM을 **앱 repo**로 |
+| credential 404 (`%20github-gitops`) | ID **앞 공백** |
+| ECR push denied | IAM **push** 권한 |
+| could not read Username | `withCredentials` 로 push |
+| 403 denied to sk4cks | PAT `repo` scope |
+| Argo Sync 안 바뀜 | 주석만 수정 → diff 없음. **image 태그** 변경 필요 |
+
+## 12. 배운 것
+
+1. **CI(Jenkins) + CD(Argo)** 는 역할이 다르다 — repo도 앱 / deploy 로 나뉜다
+2. **Jenkins 설치 = Pod manifest apply** — apt install 과 다름
+3. **8080** 은 Pod **안** 포트 — 겹침 걱정은 Pod·Service 단위로 보면 된다
+4. **Webhook** 이 push와 1:1에 가깝다
+5. **IAM read ≠ push** — CI 붙이면 role 권한도 올려야 한다
+
+## 13. 시리즈 링크
+
+| 글 | 내용 |
+|----|------|
+| [vm00008](/blog/virtualMachine/vm00008) | EC2 + k3s 첫 배포 |
+| [vm00009](/blog/virtualMachine/vm00009) | Argo CD GitOps |
+| **vm00010** (이 글) | Jenkins CI + Webhook |
+
+---
+
+**다음에 할 것:** 실제 도메인(Cloudflare), Jenkins Java 21, 테스트 단계 CI 포함 (`-x test` 제거)
