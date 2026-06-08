@@ -20,7 +20,7 @@
   "ubuntu": 1,
   "aws": 3,
   "ec2": 3,
-  "k3s": 3,
+  "k3s": 4,
   "kubernetes": 3,
   "ecr": 2,
   "oauth2": 1,
@@ -32,11 +32,17 @@
   "ci": 1,
   "github": 1,
   "webhook": 1,
+  "oauth": 1,
+  "google": 1,
+  "pkce": 1,
+  "spring-authorization-server": 1,
+  "react": 1,
+  "bff": 1,
   "db": 3,
   "postgresql": 2,
   "sql": 2,
   "javascript": 6,
-  "vanilla-js": 1,
   "react-js": 4,
-  "vue-js": 1
+  "vue-js": 1,
+  "vanilla-js": 1
 }
