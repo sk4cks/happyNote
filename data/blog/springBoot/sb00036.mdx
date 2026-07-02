@@ -1,0 +1,414 @@
+---
+title: '🧪[Spring Boot] 서비스 테스트 코드 작성기 — Mockito 단위 테스트 실전'
+date: 2026-06-23
+tags: ['springboot', 'junit', 'mockito', 'test', 'react-note']
+draft: false
+layout: PostSimple
+---
+
+## 목차
+
+<TOCInline toc={props.toc} exclude="목차"/>
+
+---
+
+> **react-note-api** BFF에 `AuthService`, `RefreshTokenCookieService`, `MailService` 단위 테스트를 붙이면서 정리한 글입니다.<br/>
+> Controller 슬라이스 테스트(`@WebMvcTest`)와 **무엇이 다른지**, **어떤 어노테이션을 쓰는지**, **실제 코드 예시**까지 한 번에 모았습니다.
+
+## 1. 테스트를 층(layer)별로 나눈다
+
+Spring Boot API를 테스트할 때 보통 이렇게 나눕니다.
+
+| 층 | 테스트 | 핵심 어노테이션 | 검증 대상 |
+|----|--------|----------------|-----------|
+| **Controller** | `AuthControllerTest` | `@WebMvcTest` + `@MockBean` | HTTP status, JSON, redirect |
+| **Service** | `AuthServiceTest` | `@ExtendWith(MockitoExtension)` + `@Mock` | 비즈니스 흐름, 위임, 예외 변환 |
+| **Client/Repository** | (통합 테스트) | `@DataJpaTest`, Testcontainers 등 | SQL, 외부 API 실연동 |
+
+**Service 테스트는 Spring을 띄우지 않습니다.**  
+의존성만 가짜(`@Mock`)로 바꾸고, **이 클래스의 책임**만 빠르게 검증합니다.
+
+```
+ControllerTest  →  "JWT 없으면 401인가?"
+ServiceTest     →  "unread 메일이면 markThreadAsRead를 호출하는가?"
+```
+
+둘 다 의미 있습니다. 역할이 다릅니다.
+
+---
+
+## 2. Service 테스트 기본 뼈대
+
+### ✓ 필요한 의존성
+
+`spring-boot-starter-test`에 JUnit 5 + Mockito + AssertJ가 포함되어 있습니다.
+
+```gradle
+testImplementation 'org.springframework.boot:spring-boot-starter-test'
+```
+
+### ✓ 클래스 템플릿
+
+```java
+@ExtendWith(MockitoExtension.class)
+class MailServiceTest {
+
+  @Mock private AuthServerClient authServerClient;
+  @Mock private GmailClient gmailClient;
+
+  @InjectMocks private MailService mailService;
+
+  @Test
+  void listMessages_fetchesTokenAndDelegatesToGmailClient() {
+    // given → when → then
+  }
+}
+```
+
+### ✓ 어노테이션 정리
+
+| 어노테이션 | 역할 |
+|-----------|------|
+| `@ExtendWith(MockitoExtension.class)` | JUnit 5에 Mockito 연결. `@Mock`, `@InjectMocks` 활성화 |
+| `@Mock` | 의존성 **가짜 객체** 생성 |
+| `@InjectMocks` | `@Mock`을 생성자/필드에 주입한 **테스트 대상** 인스턴스 생성 |
+
+> JUnit 4의 `@RunWith(MockitoJUnitRunner.class)` → JUnit 5에서는 `@ExtendWith(MockitoExtension.class)` 로 대체됩니다.
+
+### ✓ `@Mock` vs `@MockBean`
+
+| | `@Mock` | `@MockBean` |
+|---|---------|-------------|
+| Spring 필요 | ❌ | ✅ |
+| 사용처 | Service 단위 테스트 | `@WebMvcTest`, `@SpringBootTest` |
+| 주입 | `@InjectMocks` | Spring ApplicationContext Bean 교체 |
+
+**Service 테스트 = `@Mock` + `@InjectMocks`** 가 정답입니다.
+
+---
+
+## 3. 테스트 이름 짓기
+
+한 테스트 = 한 가지 행동. 이름은 **메서드_상황_기대결과** 패턴이 읽기 쉽습니다.
+
+```text
+login_returnsToken_whenAuthServerSucceeds
+login_throws_whenResponseBodyEmpty
+readRefreshToken_returnsNull_whenNoCookies
+getMessage_marksThreadAsRead_whenUnread
+```
+
+---
+
+## 4. AuthServiceTest — 외부 Client 위임 + 에러 변환
+
+`AuthService`는 `AuthServerClient`를 통해 Auth Server(:9000)와 통신합니다.  
+테스트에서는 **Auth Server를 띄우지 않고** Client만 mock 합니다.
+
+### ✓ 성공 케이스 — when / thenReturn
+
+```java
+@Test
+void login_returnsToken_whenAuthServerSucceeds() {
+  LoginRequest request = new LoginRequest("user1", "1234");
+  TokenResponse tokens =
+      new TokenResponse("access-1", "Bearer", 3600L, "refresh-1", "openid");
+
+  when(authServerClient.login(request)).thenReturn(ResponseEntity.ok(tokens));
+
+  TokenResponse result = authService.login(request);
+
+  assertThat(result).isEqualTo(tokens);
+  verify(authServerClient).login(request);
+}
+```
+
+- `when(...).thenReturn(...)` — mock이 **이렇게 응답해라** (스텁 등록)
+- `verify(...)` — **이 메서드가 호출됐는지** 확인
+
+### ✓ 빈 body — assertThatThrownBy
+
+```java
+@Test
+void login_throws_whenResponseBodyEmpty() {
+  when(authServerClient.login(request)).thenReturn(ResponseEntity.ok(null));
+
+  assertThatThrownBy(() -> authService.login(request))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Login failed: empty response");
+}
+```
+
+### ✓ HTTP 4xx — 예외 래핑 검증
+
+```java
+HttpClientErrorException ex =
+    HttpClientErrorException.create(
+        HttpStatus.UNAUTHORIZED,
+        "Unauthorized",
+        HttpHeaders.EMPTY,
+        "bad credentials".getBytes(StandardCharsets.UTF_8),
+        StandardCharsets.UTF_8);
+when(authServerClient.login(request)).thenThrow(ex);
+
+assertThatThrownBy(() -> authService.login(request))
+    .hasMessageContaining("Login failed: bad credentials")
+    .hasCause(ex);
+```
+
+`exchangeToken`, `refreshToken`도 같은 패턴으로 **성공 / 빈 body / HTTP 에러** 세 가지를 나눠 테스트합니다.
+
+### ✓ void + 부수 효과 — sendRedirect
+
+`redirectToSocialPrepare`는 반환값 없이 `HttpServletResponse.sendRedirect`를 호출합니다.
+
+```java
+@Mock private HttpServletResponse httpServletResponse;
+
+@Test
+void redirectToSocialPrepare_sendsRedirectToAuthServerUrl() throws Exception {
+  String targetUrl = "http://localhost:9000/auth/social/prepare/google?state=s1";
+  when(authServerClient.buildSocialPrepareRedirectUrl(
+          "google", "s1", "challenge", "http://localhost:8080/oauth/callback"))
+      .thenReturn(targetUrl);
+
+  authService.redirectToSocialPrepare(
+      "google", "s1", "challenge", "http://localhost:8080/oauth/callback",
+      httpServletResponse);
+
+  verify(httpServletResponse).sendRedirect(targetUrl);
+}
+```
+
+> Controller 테스트의 `doAnswer`는 **mock이 호출될 때** 람다가 실행됩니다. `doAnswer` 줄 자체가 먼저 실행되는 게 아니라, **스텁 등록 → mockMvc → 컨트롤러 → mock 메서드 호출 시** 람다가 돕니다.
+
+---
+
+## 5. RefreshTokenCookieServiceTest — Servlet mock + Properties 실객체
+
+HttpOnly refresh cookie 읽기/쓰기/삭제를 검증합니다.
+
+### ✓ Properties는 mock 안 함
+
+`RefreshTokenCookieProperties`는 `@ConfigurationProperties`로 yml 값을 담는 **설정 객체**입니다. DTO가 아닙니다.
+
+```java
+private static final RefreshTokenCookieProperties PROPERTIES =
+    new RefreshTokenCookieProperties("refresh_token", true, "Lax", 30);
+
+@BeforeEach
+void setUp() {
+  cookieService = new RefreshTokenCookieService(PROPERTIES);
+}
+```
+
+설정 값만 필요하면 **가벼운 실객체**가 mock보다 읽기 쉽습니다.
+
+### ✓ cookie 읽기
+
+```java
+@Mock private HttpServletRequest request;
+
+@Test
+void readRefreshToken_returnsValue_whenCookiePresent() {
+  when(request.getCookies())
+      .thenReturn(new Cookie[] { new Cookie("refresh_token", "rt-secret") });
+
+  assertThat(cookieService.readRefreshToken(request)).isEqualTo("rt-secret");
+}
+```
+
+### ✓ Set-Cookie 헤더 — ArgumentCaptor
+
+응답 헤더 문자열을 잡아서 HttpOnly, SameSite, Max-Age를 검증합니다.
+
+```java
+@Test
+void writeRefreshToken_setsCookieHeader_whenTokenPresent() {
+  cookieService.writeRefreshToken(response, "rt-secret");
+
+  ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+  verify(response).addHeader(eq("Set-Cookie"), captor.capture());
+
+  String header = captor.getValue();
+  assertThat(header).contains("refresh_token=rt-secret");
+  assertThat(header).contains("HttpOnly");
+  assertThat(header).contains("SameSite=Lax");
+  assertThat(header).contains("Max-Age=2592000"); // 30일
+}
+```
+
+### ✓ blank token — verifyNoInteractions
+
+```java
+@Test
+void writeRefreshToken_doesNothing_whenTokenBlank() {
+  cookieService.writeRefreshToken(response, "  ");
+  verifyNoInteractions(response);
+}
+```
+
+---
+
+## 6. MailServiceTest — 분기(branch)가 있는 Service
+
+`MailService`는 Gmail 연동 전에 Auth Server에서 Google access token을 가져옵니다.
+
+### ✓ 단순 위임
+
+```java
+when(authServerClient.fetchGoogleAccessToken(principal)).thenReturn(googleToken);
+when(gmailClient.listMessages(googleToken, "inbox", 20, null)).thenReturn(expected);
+
+MailMessageListDto result = mailService.listMessages(principal, "inbox", null);
+
+assertThat(result).isEqualTo(expected);
+```
+
+### ✓ unread일 때만 읽음 처리
+
+```java
+@Test
+void getMessage_marksThreadAsRead_whenUnread() {
+  when(gmailClient.getMessage(googleToken, "msg-1")).thenReturn(unreadDetail);
+
+  MailMessageDetailDto result = mailService.getMessage(principal, "msg-1");
+
+  verify(gmailClient).markThreadAsRead(googleToken, "thread-1");
+  assertThat(result.unread()).isFalse();
+}
+```
+
+### ✓ 읽음 처리 실패해도 상세는 반환 — doThrow
+
+```java
+doThrow(new RuntimeException("Gmail API error"))
+    .when(gmailClient).markThreadAsRead(googleToken, "thread-1");
+
+MailMessageDetailDto result = mailService.getMessage(principal, "msg-1");
+
+assertThat(result).isEqualTo(unreadDetail); // unread=true 유지
+```
+
+### ✓ 이미 읽은 메일 — verifyNoMoreInteractions
+
+```java
+verify(gmailClient).getMessage(googleToken, "msg-1");
+verifyNoMoreInteractions(gmailClient); // markThreadAsRead 호출 없음
+```
+
+---
+
+## 7. Mockito 자주 쓰는 API
+
+| API | 용도 |
+|-----|------|
+| `when(mock.method()).thenReturn(x)` | 반환값 스텁 |
+| `when(mock.method()).thenThrow(ex)` | 예외 스텁 |
+| `doThrow(ex).when(mock).method()` | void 메서드 예외 |
+| `verify(mock).method()` | 호출 여부 |
+| `verify(mock, never()).method()` | 호출 안 됨 |
+| `verifyNoMoreInteractions(mock)` | 추가 호출 없음 |
+| `ArgumentCaptor.forClass(T.class)` | 전달된 인자 캡처 |
+| `any()`, `eq("value")` | 인자 매처 |
+
+---
+
+## 8. TDD와 Service 테스트
+
+TDD 사이클: **Red → Green → Refactor**
+
+```
+1. 실패하는 테스트 작성 (Red)
+2. 통과할 최소 코드 (Green)
+3. 정리 (Refactor)
+```
+
+Service TDD에서는 **Repository / Client를 `@Mock`** 하고 빠르게 루프를 돕니다.
+
+```text
+예: "unread면 markThreadAsRead 호출" 테스트 (Red)
+  → getMessage에 if (unread) 로직 추가 (Green)
+  → "mark 실패해도 상세 반환" 테스트 (Red)
+  → try/catch 추가 (Green)
+```
+
+JPA/MyBatis가 있어도 **Service 테스트에서 Mapper/Repository는 mock**입니다.  
+Mapper/Repository **자체** 검증은 DB 붙은 **별도 통합 테스트**(`@DataJpaTest`, `@MybatisTest`)로 합니다.
+
+---
+
+## 9. "가짜로 테스트하면 의미가 있나?"
+
+**있습니다.** 다만 검증 범위가 다릅니다.
+
+| Service 테스트 (mock) | 통합 테스트 (실연동) |
+|----------------------|---------------------|
+| 내 코드가 **올바르게 호출**하는가 | Auth/Gmail/DB가 **실제로 동작**하는가 |
+| 0.3초, 수백 번 실행 | 느림, 환경 의존 |
+
+`MailServiceTest`는 "Gmail이 잘 된다"가 아니라  
+**"MailService가 GmailClient를 올바른 순서·인자로 호출한다"** 를 증명합니다.
+
+---
+
+## 10. 실행 방법
+
+```bash
+# Service 테스트만
+./gradlew test --tests note_api.auth.AuthServiceTest --rerun-tasks
+./gradlew test --tests note_api.auth.RefreshTokenCookieServiceTest --rerun-tasks
+./gradlew test --tests note_api.mail.MailServiceTest --rerun-tasks
+
+# auth 패키지 전체
+./gradlew test --tests 'note_api.auth.*' --rerun-tasks
+```
+
+`BUILD SUCCESSFUL`만으로는 테스트가 **스킵(up-to-date)** 됐을 수 있습니다.  
+확실히 돌리려면 `--rerun-tasks` 또는 `clean test`를 붙이세요.
+
+디버깅:
+
+```bash
+./gradlew test --tests note_api.auth.AuthServiceTest --debug-jvm --rerun-tasks
+# → Listening on 5005 → IDE Attach 또는 jdb -attach 5005
+```
+
+---
+
+## 11. react-note-api 테스트 맵 (현재)
+
+```text
+src/test/java/note_api/
+├── auth/
+│   ├── AuthControllerTest.java      @WebMvcTest — HTTP 계약
+│   ├── AuthServiceTest.java         @Mock — Auth Server 위임
+│   └── RefreshTokenCookieServiceTest.java
+├── mail/
+│   ├── MailControllerTest.java      @WebMvcTest — HTTP + JWT
+│   └── MailServiceTest.java         @Mock — Gmail 위임 + 분기
+└── user/
+    └── MeControllerTest.java        @WebMvcTest — /api/me
+```
+
+---
+
+## 12. 한 줄 정리
+
+| 질문 | 답 |
+|------|-----|
+| Service 테스트에 Spring? | ❌ `@ExtendWith(MockitoExtension)` |
+| 의존성은? | `@Mock` + `@InjectMocks` |
+| Controller 테스트와 차이? | Controller=`@MockBean`+MockMvc, Service=`@Mock`+직접 호출 |
+| 무엇을 검증? | 위임, 분기, 예외 변환, 부수 효과(redirect, cookie) |
+| TDD 루프? | Service mock 테스트가 Red-Green에 적합 |
+
+Service 테스트는 **빠른 안전망**입니다.  
+Controller 테스트와 짝을 이루면 **HTTP 계약 + 비즈니스 규칙**을 각각 확실히 잡을 수 있습니다.
+
+---
+
+### 관련 글
+
+- [react-note에 Gmail 웹메일 붙이기 (vm00012)](/blog/virtualMachine/vm00012) — BFF + Gmail API 아키텍처
+- [스프링 부트 테스트 전환 (sb00014)](/blog/springBoot/sb00014) — `@JdbcTest`, `@SpringBootTest` 개요
